@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/Dual_Demo.png" alt="BS3 in action" width="800"/>
+  <img src="assets/Dual_Demo_with_Drop.png" alt="BS3 in action" width="800"/>
 </p>
 
 <p align="center">
