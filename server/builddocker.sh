@@ -1,0 +1,1 @@
+docker build -t bs3-server .

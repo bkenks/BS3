@@ -1,0 +1,7 @@
+services:
+  test-alpine:
+    image: alpine:latest
+    container_name: test_alpine_env
+    environment:
+      - TEST
+    command: sh -c "echo 'Printing environment variables:' && env"

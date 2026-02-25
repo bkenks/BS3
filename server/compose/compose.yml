@@ -1,0 +1,11 @@
+services:
+  bs3-server:
+    image: bs3-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - bs3-data:/data
+    restart: unless-stopped
+
+volumes:
+  bs3-data:
