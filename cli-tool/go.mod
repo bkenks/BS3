@@ -1,6 +1,8 @@
-module github.com/bkenks/bs3-cli
+module github.com/bkenks/bs3
 
 go 1.25.7
+
+replace github.com/bkenks/bs3-logger => ../logger
 
 require (
 	github.com/bkenks/bs3-logger v0.0.0-20260222230654-1e61b59041b6

@@ -1,8 +1,8 @@
 package events
 
 import (
-	"github.com/bkenks/bs3-cli/internal/apiclient"
-	"github.com/bkenks/bs3-cli/internal/tui/ui/shared"
+	"github.com/bkenks/bs3/internal/apiclient"
+	"github.com/bkenks/bs3/internal/tui/ui/shared"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

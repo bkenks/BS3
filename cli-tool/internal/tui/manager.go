@@ -6,13 +6,13 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/bkenks/bs3-cli/internal/apiclient"
-	"github.com/bkenks/bs3-cli/internal/tui/ui/events"
-	"github.com/bkenks/bs3-cli/internal/tui/ui/menu"
-	"github.com/bkenks/bs3-cli/internal/tui/ui/secrets"
-	"github.com/bkenks/bs3-cli/internal/tui/ui/shared"
-	"github.com/bkenks/bs3-cli/internal/tui/ui/tokens"
-	"github.com/bkenks/bs3-cli/internal/tui/ui/users"
+	"github.com/bkenks/bs3/internal/apiclient"
+	"github.com/bkenks/bs3/internal/tui/ui/events"
+	"github.com/bkenks/bs3/internal/tui/ui/menu"
+	"github.com/bkenks/bs3/internal/tui/ui/secrets"
+	"github.com/bkenks/bs3/internal/tui/ui/shared"
+	"github.com/bkenks/bs3/internal/tui/ui/tokens"
+	"github.com/bkenks/bs3/internal/tui/ui/users"
 )
 
 // statusMsgSetter is implemented by dialog models that can display error messages.

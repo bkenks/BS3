@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/bkenks/bs3-cli/internal/cli"
+	"github.com/bkenks/bs3/internal/cli"
 )
 
 func main() {

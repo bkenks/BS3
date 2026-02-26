@@ -6,11 +6,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bkenks/bs3-cli/internal/apiclient"
-	"github.com/bkenks/bs3-cli/internal/constants"
-	"github.com/bkenks/bs3-cli/internal/enveditor"
-	"github.com/bkenks/bs3-cli/internal/injector"
-	"github.com/bkenks/bs3-cli/internal/tui"
+	"github.com/bkenks/bs3/internal/apiclient"
+	"github.com/bkenks/bs3/internal/constants"
+	"github.com/bkenks/bs3/internal/enveditor"
+	"github.com/bkenks/bs3/internal/injector"
+	"github.com/bkenks/bs3/internal/tui"
 	l "github.com/bkenks/bs3-logger"
 	"github.com/joho/godotenv"
 )

@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
 set -e
 
-REPO="bkenks/bs3-cli"
-BINARY_NAME="bs3-cli"
-VERSION=$(curl -fsSL https://api.github.com/repos/bkenks/bs3-cli/releases/latest |
+REPO="bkenks/bs3"
+BINARY_NAME="bs3"
+VERSION=$(curl -fsSL https://api.github.com/repos/bkenks/bs3/releases/latest |
     grep tag_name |
     cut -d '"' -f4)
 

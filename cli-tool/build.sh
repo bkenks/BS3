@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Name of your Go binary
-BINARY_NAME="bs3-cli"
+BINARY_NAME="bs3"
 
 # List of OS/ARCH combinations
 PLATFORMS=(

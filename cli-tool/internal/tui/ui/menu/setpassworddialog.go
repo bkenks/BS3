@@ -8,10 +8,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/bkenks/bs3-cli/internal/constants"
-	"github.com/bkenks/bs3-cli/internal/enveditor"
-	"github.com/bkenks/bs3-cli/internal/tui/ui/events"
-	"github.com/bkenks/bs3-cli/internal/tui/ui/shared"
+	"github.com/bkenks/bs3/internal/constants"
+	"github.com/bkenks/bs3/internal/enveditor"
+	"github.com/bkenks/bs3/internal/tui/ui/events"
+	"github.com/bkenks/bs3/internal/tui/ui/shared"
 )
 
 type SetPasswordDialog struct {
