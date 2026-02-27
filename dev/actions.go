@@ -86,11 +86,19 @@ var allActions = []*action{
 
 	{
 		title:       "Server › Build Docker Image",
-		description: "Build the bs3-server Docker image using the repo root as build context",
+		description: "Build the bs3-server Docker image for linux/amd64 + linux/arm64 using buildx",
 		makeCmd: func(repoRoot string) *exec.Cmd {
 			// The Dockerfile uses a multi-stage build that copies the logger
 			// module, so the build context must be the repo root — not server/.
-			cmd := exec.Command("docker", "build", "-f", "server/Dockerfile", "-t", "bs3-server", ".")
+			// buildx is required for multi-platform builds; the image is stored
+			// in the buildx cache (not the local daemon) — use Tag & Push to
+			// push directly to a registry with both platforms.
+			cmd := exec.Command("docker", "buildx", "build",
+				"--platform", "linux/amd64,linux/arm64",
+				"-f", "server/Dockerfile",
+				"-t", "bs3-server",
+				".",
+			)
 			cmd.Dir = repoRoot
 			return cmd
 		},
@@ -116,19 +124,24 @@ var allActions = []*action{
 	// ── Docker Registry ───────────────────────────────────────────────────────
 
 	{
-		// makeInputCmd is used so docker push runs interactively — the user
+		// makeInputCmd is used so the build+push runs interactively — the user
 		// sees live layer-push progress in the terminal.
 		title:       "Docker › Tag & Push",
-		description: "Tag the local bs3-server image and push it to a registry",
+		description: "Build and push the bs3-server image (linux/amd64 + linux/arm64) to a registry",
 		inputPrompt: "Image name (e.g. ktbgroup/bs3-server:1.0):",
-		makeInputCmd: func(_ string, imageName string) *exec.Cmd {
-			// Run both steps in a single shell invocation so push only runs
-			// if tag succeeds, and the user sees the full docker output.
-			script := fmt.Sprintf(
-				`docker tag bs3-server "%s" && docker push "%s"`,
-				imageName, imageName,
+		makeInputCmd: func(repoRoot string, imageName string) *exec.Cmd {
+			// buildx build --push produces a true multi-platform manifest in
+			// the registry. docker tag + docker push cannot do this because
+			// multi-platform images cannot be loaded into the local daemon.
+			cmd := exec.Command("docker", "buildx", "build",
+				"--platform", "linux/amd64,linux/arm64",
+				"-f", "server/Dockerfile",
+				"-t", imageName,
+				"--push",
+				".",
 			)
-			return exec.Command("sh", "-c", script)
+			cmd.Dir = repoRoot
+			return cmd
 		},
 	},
 }
