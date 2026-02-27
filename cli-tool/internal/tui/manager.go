@@ -29,13 +29,14 @@ type ModelManager struct {
 	mainMenu *menu.Model
 
 	// Menu dialogs
-	initVaultDlg   *menu.InitVaultDialog
-	openVaultDlg   *menu.OpenVaultDialog
-	errDialog      *menu.ErrorDialog
-	setTokenDlg    *menu.SetAPITokenDialog
-	setURLDlg      *menu.SetServerURLDialog
-	setUsernameDlg *menu.SetUsernameDialog
-	setPasswordDlg *menu.SetPasswordDialog
+	initVaultDlg      *menu.InitVaultDialog
+	openVaultDlg      *menu.OpenVaultDialog
+	errDialog         *menu.ErrorDialog
+	setTokenDlg       *menu.SetAPITokenDialog
+	setURLDlg         *menu.SetServerURLDialog
+	setUsernameDlg    *menu.SetUsernameDialog
+	setPasswordDlg    *menu.SetPasswordDialog
+	setAuthMethodDlg  *menu.SetAuthMethodDialog
 
 	// List models (persistent, hold pointer to m.client)
 	secretsList *secrets.Model
@@ -128,6 +129,11 @@ func (m *ModelManager) switchState(state shared.SessionState) tea.Cmd {
 		m.setPasswordDlg = menu.NewSetPasswordDialog()
 		m.active = m.setPasswordDlg
 		return m.setPasswordDlg.Init()
+
+	case shared.StateSetAuthMethod:
+		m.setAuthMethodDlg = menu.NewSetAuthMethodDialog()
+		m.active = m.setAuthMethodDlg
+		return m.setAuthMethodDlg.Init()
 
 	case shared.StateViewSecret:
 		if item, ok := m.secretsList.SelectedItem(); ok {
@@ -263,6 +269,18 @@ func (m *ModelManager) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.client.BaseURL = strings.TrimRight(ev.URL, "/")
 			return m, nil
 
+		case events.UsernameSaved:
+			m.client.Username = ev.Username
+			return m, nil
+
+		case events.PasswordSaved:
+			m.client.Password = ev.Password
+			return m, nil
+
+		case events.AuthMethodSaved:
+			m.client.AuthMethod = ev.Method
+			return m, nil
+
 		case events.SecretsRefreshed:
 			m.secretsList.SetItems(ev.Secrets)
 			return m, nil
@@ -364,8 +382,11 @@ func (m *ModelManager) View() string {
 
 // ─── Run ─────────────────────────────────────────────────────────────────────
 
-func Run(baseURL, token string) error {
+func Run(baseURL, token, username, password, authMethod string) error {
 	client := apiclient.NewClient(baseURL, token)
+	client.Username = username
+	client.Password = password
+	client.AuthMethod = authMethod
 	p := tea.NewProgram(New(*client), tea.WithAltScreen())
 	_, err := p.Run()
 	return err

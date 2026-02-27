@@ -11,9 +11,12 @@ import (
 )
 
 type Client struct {
-	BaseURL string
-	Token   string
-	Client  *http.Client
+	BaseURL    string
+	Token      string
+	Username   string
+	Password   string
+	AuthMethod string
+	Client     *http.Client
 }
 
 // ~~~ NewClient ~~~
@@ -26,6 +29,19 @@ func NewClient(baseURL, token string) *Client {
 	}
 }
 
+// setAuth attaches credentials to a request.
+// When AuthMethod is "basic", Basic Auth is used unconditionally.
+// Otherwise (default), Bearer token is used if set.
+func (c *Client) setAuth(req *http.Request) {
+	if c.AuthMethod == "basic" {
+		req.SetBasicAuth(c.Username, c.Password)
+	} else {
+		if c.Token != "" {
+			req.Header.Set("Authorization", "Bearer "+c.Token)
+		}
+	}
+}
+
 // ~~~ GetSecret ~~~
 // sends GET http request to BS3 server to retreive secret by name
 // returning a map with the name and secret value
@@ -35,7 +51,7 @@ func (c *Client) GetSecret(name string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.setAuth(req)
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
@@ -65,7 +81,7 @@ func (c *Client) ListSecrets() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.setAuth(req)
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
@@ -102,7 +118,7 @@ func (c *Client) ListSecretsMeta() ([]SecretMeta, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.setAuth(req)
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
@@ -138,7 +154,7 @@ func (c *Client) ListUsers() ([]UserMeta, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.setAuth(req)
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
@@ -173,7 +189,7 @@ func (c *Client) AddUser(username, password string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.setAuth(req)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.Client.Do(req)
@@ -198,7 +214,7 @@ func (c *Client) DeleteUser(username string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.setAuth(req)
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
@@ -238,7 +254,7 @@ func (c *Client) ListTokens() ([]TokenMeta, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.setAuth(req)
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
@@ -268,7 +284,7 @@ func (c *Client) GenerateToken(name string, ttl int64) (*GeneratedToken, error) 
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.setAuth(req)
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
@@ -297,7 +313,7 @@ func (c *Client) DeleteToken(name string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.setAuth(req)
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
@@ -321,7 +337,7 @@ func (c *Client) DeleteSecret(name string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.setAuth(req)
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
@@ -356,7 +372,7 @@ func (c *Client) InitializeVault(username, password, masterPassphrase string) er
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.setAuth(req)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.Client.Do(req)
@@ -423,7 +439,7 @@ func (c *Client) StoreSecret(name, value string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	c.setAuth(req)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.Client.Do(req)

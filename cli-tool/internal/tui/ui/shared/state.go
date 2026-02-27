@@ -23,5 +23,6 @@ const (
 	StateSetServerURL
 	StateSetUsername
 	StateSetPassword
+	StateSetAuthMethod
 	StateErrorDialog
 )

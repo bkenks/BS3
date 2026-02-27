@@ -1,8 +1,7 @@
 package constants
 
 var (
-	// DataPath              = "/data"
-	DataPath              = "/Users/briankenkel/Development/bs3data"
+	DataPath              = "/data"
 	DBFilename            = "vault.db"
 	SaltFilename          = "vault_salt"
 	MasterKeyHashFilename = "mkey_hash"

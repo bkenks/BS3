@@ -1,6 +1,6 @@
 services:
   bs3-server:
-    image: bs3-server
+    image: bs3-server:latest
     ports:
       - "8080:8080"
     volumes:

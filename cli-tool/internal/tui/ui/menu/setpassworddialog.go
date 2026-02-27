@@ -64,7 +64,7 @@ func (m *SetPasswordDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		_ = os.Setenv(constants.ENV_VAR_BS3_PASSWORD, password)
 		m.saved = true
-		return m, nil
+		return m, func() tea.Msg { return events.PasswordSaved{Password: password} }
 	default:
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)

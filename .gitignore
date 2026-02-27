@@ -31,4 +31,9 @@ go.work.sum
 # .idea/
 .vscode/
 
+# Claude Code
+.claude
 CLAUDE.md
+
+# Testing
+.testing/

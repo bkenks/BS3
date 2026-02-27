@@ -21,6 +21,7 @@ var menuEntries = []menuEntry{
 	{"Set Server URL", "Configure the BS3 server URL", shared.StateSetServerURL},
 	{"Set Username", "Set the username for vault authentication", shared.StateSetUsername},
 	{"Set Password", "Set the password for vault authentication", shared.StateSetPassword},
+	{"Set Auth Method", "Choose bearer token or basic auth", shared.StateSetAuthMethod},
 	{"View Secrets", "Browse and manage stored secrets", shared.StateSecretsList},
 	{"View Tokens", "Browse and manage API tokens", shared.StateTokensList},
 	{"View Users", "Browse and manage users", shared.StateUsersList},

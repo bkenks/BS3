@@ -12,10 +12,12 @@ var (
 	UsrConfigDir         string
 	UsrCacheDir          string
 	BS3EnvPath           string
-	ENV_VAR_BS3_TOKEN    = "BS3_API_TOKEN"
-	ENV_VAR_BS3_URL      = "BS3_SERVER_URL"
-	ENV_VAR_BS3_USERNAME = "BS3_USERNAME"
-	ENV_VAR_BS3_PASSWORD = "BS3_PASSWORD"
+	DevShmDir            = "/dev/shm"
+	ENV_VAR_BS3_TOKEN       = "BS3_API_TOKEN"
+	ENV_VAR_BS3_URL         = "BS3_SERVER_URL"
+	ENV_VAR_BS3_USERNAME    = "BS3_USERNAME"
+	ENV_VAR_BS3_PASSWORD    = "BS3_PASSWORD"
+	ENV_VAR_BS3_AUTH_METHOD = "BS3_AUTH_METHOD"
 )
 
 func init() {

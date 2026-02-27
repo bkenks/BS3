@@ -63,7 +63,7 @@ func (m *SetUsernameDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		_ = os.Setenv(constants.ENV_VAR_BS3_USERNAME, username)
 		m.saved = true
-		return m, nil
+		return m, func() tea.Msg { return events.UsernameSaved{Username: username} }
 	default:
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)

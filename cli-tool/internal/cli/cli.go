@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -25,11 +26,12 @@ const (
 
 var (
 	// Config
-	argSet       = "set"
-	argAPIToken  = "apitoken"
-	argServerURL = "serverurl"
-	argUsername  = "username"
-	argPassword  = "password"
+	argSet        = "set"
+	argAPIToken   = "apitoken"
+	argServerURL  = "serverurl"
+	argUsername   = "username"
+	argPassword   = "password"
+	argAuthMethod = "authmethod"
 
 	// Vault lifecycle
 	argTUI       = "tui"
@@ -42,6 +44,8 @@ var (
 	argStore      = "store"
 	argDelete     = "delete"
 	argListSecret = "listsecrets"
+	argWriteEnv   = "writeenv"
+	argRmEnv      = "rmenv"
 
 	// Tokens
 	argGenerateToken = "generatetoken"
@@ -54,11 +58,60 @@ var (
 	argListUsers  = "listusers"
 )
 
+// ~~~ printHelp ~~~
+func printHelp() {
+	fmt.Print(`BS3 - Self-hosted secrets vault CLI
+
+USAGE:
+    bs3 <command> [arguments]
+
+VAULT LIFECYCLE:
+    tui                                     Launch the interactive TUI
+    initvault <username> <password>         Initialize the vault with an admin user
+                <master_passphrase>
+    openvault <master_passphrase>           Unlock the vault (required after every restart)
+
+SECRETS:
+    get <name>                              Fetch and print a secret value
+    store <name> <value>                    Store a new secret
+    delete <name>                           Delete a secret
+    listsecrets                             List all secrets (name, created, updated)
+    envject <secret1> [secret2...] --       Fetch secrets and inject them as env vars
+                <command> [args...]         into the given command
+    writeenv <prefix> <secret1>            Write secrets as KEY=VALUE pairs to
+                [secret2...]               /dev/shm/bs3-<prefix>.env (tmpfs, 0600)
+    rmenv <prefix>                          Delete /dev/shm/bs3-<prefix>.env
+
+TOKENS:
+    generatetoken <name> [ttl_seconds]      Generate a Bearer token (0 = no expiry)
+    deletetoken <name>                      Delete a token by name
+    listtokens                              List all tokens
+
+USERS:
+    adduser <username> <password>           Add a new user
+    deleteuser <username>                   Delete a user
+    listusers                               List all users
+
+CONFIG:
+    set apitoken <value>                    Save API token to bs3.env
+    set serverurl <value>                   Save server URL to bs3.env
+    set username <value>                    Save username to bs3.env
+    set password <value>                    Save password to bs3.env
+    set authmethod <token|basic>            Set auth method to bs3.env
+
+FLAGS:
+    --help, -h                              Show this help message
+`)
+}
+
 // ~~~ CLI Package Entrypoint ~~~
 func Run(args []string) {
-	mode := getArgSafe(args, 0,
-		"bs3 <tui|initvault|openvault|envject|get|store|delete|listsecrets|generatetoken|deletetoken|listtokens|adduser|deleteuser|listusers|set>",
-	)
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
+		printHelp()
+		return
+	}
+
+	mode := args[0]
 
 	switch mode {
 
@@ -71,7 +124,10 @@ func Run(args []string) {
 		}
 		baseURL := os.Getenv(constants.ENV_VAR_BS3_URL)
 		token := os.Getenv(constants.ENV_VAR_BS3_TOKEN)
-		if err := tui.Run(baseURL, token); err != nil {
+		username := os.Getenv(constants.ENV_VAR_BS3_USERNAME)
+		password := os.Getenv(constants.ENV_VAR_BS3_PASSWORD)
+		authMethod := os.Getenv(constants.ENV_VAR_BS3_AUTH_METHOD)
+		if err := tui.Run(baseURL, token, username, password, authMethod); err != nil {
 			l.LogError(l.Logger.Error, "tui error", "err", err)
 			os.Exit(1)
 		}
@@ -143,6 +199,46 @@ func Run(args []string) {
 		for _, s := range secs {
 			fmt.Printf("%-30s  %-24s  %s\n", s.Name, s.CreatedAt, s.UpdatedAt)
 		}
+
+	case argWriteEnv:
+		usage := fmt.Sprintf("bs3 %s <prefix> <secret1> [secret2...]", argWriteEnv)
+		prefix := getArgSafe(args, 1, usage)
+		if len(args) < 3 {
+			l.LogAddInfo(l.Logger.Fatal, "incorrect usage", "usage", usage)
+		}
+		secretNames := args[2:]
+		client := configureAPIClient()
+		var sb strings.Builder
+		for _, name := range secretNames {
+			sec, err := client.GetSecret(name)
+			if err != nil {
+				l.LogError(l.Logger.Error, "error fetching secret", "name", name, "err", err)
+				os.Exit(1)
+			}
+			sb.WriteString(fmt.Sprintf("%s=%s\n", strings.ToUpper(sec["name"]), sec["secret"]))
+		}
+		envPath := filepath.Join(constants.DevShmDir, fmt.Sprintf("bs3-%s.env", prefix))
+		f, err := os.OpenFile(envPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+		if err != nil {
+			l.LogError(l.Logger.Error, "error creating env file", "path", envPath, "err", err)
+			os.Exit(1)
+		}
+		if _, err := f.WriteString(sb.String()); err != nil {
+			f.Close()
+			l.LogError(l.Logger.Error, "error writing env file", "path", envPath, "err", err)
+			os.Exit(1)
+		}
+		f.Close()
+		fmt.Println(envPath)
+
+	case argRmEnv:
+		prefix := getArgSafe(args, 1, fmt.Sprintf("bs3 %s <prefix>", argRmEnv))
+		envPath := filepath.Join(constants.DevShmDir, fmt.Sprintf("bs3-%s.env", prefix))
+		if err := os.Remove(envPath); err != nil {
+			l.LogError(l.Logger.Error, "error removing env file", "path", envPath, "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("removed %s\n", envPath)
 
 	// ─── Tokens ───────────────────────────────────────────────────────────────
 	case argGenerateToken:
@@ -238,7 +334,7 @@ func Run(args []string) {
 	// ─── Config ───────────────────────────────────────────────────────────────
 	case argSet:
 		argToSet := getArgSafe(args, 1,
-			fmt.Sprintf("bs3 %s <%s|%s|%s|%s> <value>", argSet, argAPIToken, argServerURL, argUsername, argPassword),
+			fmt.Sprintf("bs3 %s <%s|%s|%s|%s|%s> <value>", argSet, argAPIToken, argServerURL, argUsername, argPassword, argAuthMethod),
 		)
 		switch argToSet {
 		case argAPIToken:
@@ -265,10 +361,20 @@ func Run(args []string) {
 				l.LogAddInfo(l.Logger.Fatal, "could not set environment variable",
 					"var", constants.ENV_VAR_BS3_PASSWORD, "err", err)
 			}
+		case argAuthMethod:
+			method := getArgSafe(args, 2, fmt.Sprintf("bs3 %s %s <token|basic>", argSet, argAuthMethod))
+			if method != "token" && method != "basic" {
+				l.LogAddInfo(l.Logger.Fatal, "invalid auth method", "value", method, "valid", "token|basic")
+			}
+			if err := enveditor.SetEnvValue(constants.BS3EnvPath, constants.ENV_VAR_BS3_AUTH_METHOD, method); err != nil {
+				l.LogAddInfo(l.Logger.Fatal, "could not set environment variable",
+					"var", constants.ENV_VAR_BS3_AUTH_METHOD, "err", err)
+			}
 		}
 
 	default:
-		l.Logger.Fatal("usage:\n    bs3 <tui|initvault|openvault|envject|get|store|delete|listsecrets|generatetoken|deletetoken|listtokens|adduser|deleteuser|listusers|set>...")
+		fmt.Fprintf(os.Stderr, "unknown command %q\n\nRun 'bs3 --help' for usage.\n", mode)
+		os.Exit(1)
 	}
 }
 
@@ -291,18 +397,32 @@ func configureAPIClient() *apiclient.Client {
 
 	token := os.Getenv(constants.ENV_VAR_BS3_TOKEN)
 	baseURL := os.Getenv(constants.ENV_VAR_BS3_URL)
+	username := os.Getenv(constants.ENV_VAR_BS3_USERNAME)
+	password := os.Getenv(constants.ENV_VAR_BS3_PASSWORD)
+	authMethod := os.Getenv(constants.ENV_VAR_BS3_AUTH_METHOD)
 
-	if token == "" || baseURL == "" {
-		if token == "" {
-			l.LogError(l.Logger.Error, "variable not set", "var", constants.ENV_VAR_BS3_TOKEN)
-		}
-		if baseURL == "" {
-			l.LogError(l.Logger.Error, "variable not set", "var", constants.ENV_VAR_BS3_URL)
-		}
+	if baseURL == "" {
+		l.LogError(l.Logger.Error, "variable not set", "var", constants.ENV_VAR_BS3_URL)
 		os.Exit(1)
 	}
 
-	return apiclient.NewClient(baseURL, token)
+	if authMethod == "basic" {
+		if username == "" {
+			l.LogError(l.Logger.Error, "variable not set", "var", constants.ENV_VAR_BS3_USERNAME)
+			os.Exit(1)
+		}
+	} else {
+		if token == "" {
+			l.LogError(l.Logger.Error, "variable not set", "var", constants.ENV_VAR_BS3_TOKEN)
+			os.Exit(1)
+		}
+	}
+
+	client := apiclient.NewClient(baseURL, token)
+	client.Username = username
+	client.Password = password
+	client.AuthMethod = authMethod
+	return client
 }
 
 // ~~~ openVault ~~~

@@ -68,6 +68,18 @@ type ServerURLSaved struct{ URL string }
 
 func (ServerURLSaved) isEvent() {}
 
+type UsernameSaved struct{ Username string }
+
+func (UsernameSaved) isEvent() {}
+
+type PasswordSaved struct{ Password string }
+
+func (PasswordSaved) isEvent() {}
+
+type AuthMethodSaved struct{ Method string }
+
+func (AuthMethodSaved) isEvent() {}
+
 func CmdSetState(state shared.SessionState) tea.Cmd {
 	return func() tea.Msg { return SetState{State: state} }
 }

@@ -56,6 +56,10 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
+		authMethod := "Bearer Token"
+		if auth == "" {
+			authMethod = "Basic Auth"
+		}
 		bearerStr := "Bearer "
 
 		// Token Verification
@@ -129,7 +133,7 @@ func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			w,
 			http.StatusUnauthorized,
 			"unauthorized",
-			"unauthorized user or token",
+			fmt.Sprintf("unauthorized user or token | auth method: %s", authMethod),
 			nil,
 		)
 	}
