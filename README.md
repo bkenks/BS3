@@ -19,6 +19,34 @@
 
 ---
 
+## Table of Contents
+
+- [What is BS3?](#what-is-bs3)
+- [How It Works](#how-it-works)
+  - [Vault Lifecycle](#vault-lifecycle)
+  - [Encryption Model](#encryption-model)
+  - [Authentication](#authentication)
+- [API Reference](#api-reference)
+  - [Example Workflow](#example-workflow)
+- [Installation](#installation)
+  - [Docker Compose (Recommended)](#docker-compose-recommended)
+  - [Build from Source (Server)](#build-from-source-server)
+  - [Build Docker Image](#build-docker-image)
+- [Configuration](#configuration)
+- [CLI Tool](#cli-tool)
+  - [Install the CLI](#install-the-cli)
+  - [Configuration](#configuration-1)
+  - [TUI](#tui)
+  - [Vault Lifecycle](#vault-lifecycle-1)
+  - [Secrets](#secrets)
+  - [Tokens](#tokens)
+  - [Users](#users)
+  - [Config](#config)
+- [Development](#development)
+- [Security Notes](#security-notes)
+
+---
+
 ## What is BS3?
 
 **BS3** is a lightweight, self-hosted secret management server and CLI built for homelab environments. It exposes a REST API backed by a SQLite database and uses the same **envelope encryption** strategy employed by tools like HashiCorp Vault and AWS Secrets Manager — but without the complexity or cost.
