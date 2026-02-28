@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="assets/bs3_Light_BG-Hero-w_Full_Title-With_Radial.svg" alt="BS3 Logo" width="600"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/bs3_Dark_BG-w_Full_Title.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/bs3_Light_BG-w_Full_Title.svg">
+    <img src="assets/bs3-_Light_BG-w_Full_Title.svg" alt="BS3 Logo" width="600"/>
+  </picture>
 </p>
 
 <p align="center">
@@ -21,6 +25,7 @@
 
 ## Table of Contents
 
+- [Table of Contents](#table-of-contents)
 - [What is BS3?](#what-is-bs3)
 - [How It Works](#how-it-works)
   - [Vault Lifecycle](#vault-lifecycle)
@@ -39,10 +44,13 @@
   - [TUI](#tui)
   - [Vault Lifecycle](#vault-lifecycle-1)
   - [Secrets](#secrets)
+    - [Inject secrets into a process](#inject-secrets-into-a-process)
+    - [Write secrets to a tmpfs env file](#write-secrets-to-a-tmpfs-env-file)
   - [Tokens](#tokens)
   - [Users](#users)
   - [Config](#config)
 - [Development](#development)
+  - [Project Structure](#project-structure)
 - [Security Notes](#security-notes)
 
 ---
@@ -67,11 +75,11 @@ The vault operates in three states:
 Uninitialized  →  POST /initvault  →  Locked  →  POST /openvault  →  Unlocked
 ```
 
-| State | Description |
-|---|---|
-| **Uninitialized** | No database exists. A one-time Bearer token is printed to stdout for bootstrapping. |
-| **Locked** | Database exists but the master key is not in memory. Vault must be opened with the master passphrase before secrets can be accessed. |
-| **Unlocked** | Master key is held in memory (RAM only — never written to disk). Secrets can be read and written. |
+| State             | Description                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Uninitialized** | No database exists. A one-time Bearer token is printed to stdout for bootstrapping.                                                  |
+| **Locked**        | Database exists but the master key is not in memory. Vault must be opened with the master passphrase before secrets can be accessed. |
+| **Unlocked**      | Master key is held in memory (RAM only — never written to disk). Secrets can be read and written.                                    |
 
 ### Encryption Model
 
@@ -100,20 +108,20 @@ All API routes are protected by `authMiddleware`, which supports two methods:
 
 ## API Reference
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `POST` | `/initvault` | Initial token | Initialize vault with username, password, and master passphrase |
-| `POST` | `/openvault` | Basic Auth | Unlock vault with master passphrase |
-| `GET` | `/token?name=X&ttl=N` | Basic Auth | Generate a named Bearer token (TTL in seconds, optional) |
-| `DELETE` | `/deletetoken?name=X` | Bearer or Basic | Delete a named token |
-| `GET` | `/listtokens` | Bearer or Basic | List all tokens |
-| `POST` | `/store` | Bearer or Basic | Store a named secret |
-| `GET` | `/get?name=X` | Bearer or Basic | Retrieve a secret by name |
-| `DELETE` | `/delete?name=X` | Bearer or Basic | Delete a secret by name |
-| `GET` | `/listsecrets` | Bearer or Basic | List all secret names with timestamps |
-| `POST` | `/adduser` | Bearer or Basic | Add a user |
-| `DELETE` | `/deleteuser?username=X` | Bearer or Basic | Delete a user |
-| `GET` | `/listusers` | Bearer or Basic | List all users |
+| Method   | Path                     | Auth            | Description                                                     |
+| -------- | ------------------------ | --------------- | --------------------------------------------------------------- |
+| `POST`   | `/initvault`             | Initial token   | Initialize vault with username, password, and master passphrase |
+| `POST`   | `/openvault`             | Basic Auth      | Unlock vault with master passphrase                             |
+| `GET`    | `/token?name=X&ttl=N`    | Basic Auth      | Generate a named Bearer token (TTL in seconds, optional)        |
+| `DELETE` | `/deletetoken?name=X`    | Bearer or Basic | Delete a named token                                            |
+| `GET`    | `/listtokens`            | Bearer or Basic | List all tokens                                                 |
+| `POST`   | `/store`                 | Bearer or Basic | Store a named secret                                            |
+| `GET`    | `/get?name=X`            | Bearer or Basic | Retrieve a secret by name                                       |
+| `DELETE` | `/delete?name=X`         | Bearer or Basic | Delete a secret by name                                         |
+| `GET`    | `/listsecrets`           | Bearer or Basic | List all secret names with timestamps                           |
+| `POST`   | `/adduser`               | Bearer or Basic | Add a user                                                      |
+| `DELETE` | `/deleteuser?username=X` | Bearer or Basic | Delete a user                                                   |
+| `GET`    | `/listusers`             | Bearer or Basic | List all users                                                  |
 
 ### Example Workflow
 
@@ -192,10 +200,10 @@ The image uses a multi-stage build — only the compiled binary ends up in the f
 
 ## Configuration
 
-| Method | Variable | Default | Description |
-|---|---|---|---|
-| Env var | `VAULT_API_PORT` | `8080` | Port the server listens on |
-| Flag | `--verbose` | off | Enable debug-level logging |
+| Method  | Variable         | Default | Description                |
+| ------- | ---------------- | ------- | -------------------------- |
+| Env var | `VAULT_API_PORT` | `8080`  | Port the server listens on |
+| Flag    | `--verbose`      | off     | Enable debug-level logging |
 
 ---
 
@@ -221,13 +229,13 @@ export PATH="$HOME/.local/bin:$PATH"
 
 The CLI reads connection settings from `~/.config/bs3/bs3.env` (created and managed by `bs3 set`). You can also export these as environment variables directly.
 
-| Variable | Description |
-|---|---|
-| `BS3_SERVER_URL` | URL of the BS3 server (e.g. `http://localhost:8080`) |
-| `BS3_AUTH_METHOD` | `token` (default) or `basic` |
-| `BS3_API_TOKEN` | Bearer token — used when `BS3_AUTH_METHOD=token` |
-| `BS3_USERNAME` | Username — used when `BS3_AUTH_METHOD=basic` |
-| `BS3_PASSWORD` | Password — used when `BS3_AUTH_METHOD=basic` |
+| Variable          | Description                                          |
+| ----------------- | ---------------------------------------------------- |
+| `BS3_SERVER_URL`  | URL of the BS3 server (e.g. `http://localhost:8080`) |
+| `BS3_AUTH_METHOD` | `token` (default) or `basic`                         |
+| `BS3_API_TOKEN`   | Bearer token — used when `BS3_AUTH_METHOD=token`     |
+| `BS3_USERNAME`    | Username — used when `BS3_AUTH_METHOD=basic`         |
+| `BS3_PASSWORD`    | Password — used when `BS3_AUTH_METHOD=basic`         |
 
 ```bash
 # Quickstart: configure with token auth
@@ -345,13 +353,13 @@ go vet ./...
 
 ### Project Structure
 
-| File | Purpose |
-|---|---|
-| `cmd/main.go` | Entry point: flag parsing, vault state check, HTTP server, graceful shutdown |
-| `internal/api/api.go` | All HTTP handlers and auth middleware |
-| `internal/vault/vault.go` | Vault struct, DB operations, secret CRUD |
-| `internal/cryptoutil/cryptoutil.go` | Argon2id, AES-GCM, HMAC token generation |
-| `internal/constants/constants.go` | File paths and env var names |
+| File                                | Purpose                                                                      |
+| ----------------------------------- | ---------------------------------------------------------------------------- |
+| `cmd/main.go`                       | Entry point: flag parsing, vault state check, HTTP server, graceful shutdown |
+| `internal/api/api.go`               | All HTTP handlers and auth middleware                                        |
+| `internal/vault/vault.go`           | Vault struct, DB operations, secret CRUD                                     |
+| `internal/cryptoutil/cryptoutil.go` | Argon2id, AES-GCM, HMAC token generation                                     |
+| `internal/constants/constants.go`   | File paths and env var names                                                 |
 
 ---
 
@@ -367,4 +375,4 @@ go vet ./...
 
 ---
 
-*BS3 — Because `.env` files aren't a secrets strategy.*
+_BS3 — Because `.env` files aren't a secrets strategy._
