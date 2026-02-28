@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -34,6 +35,11 @@ func SetEnvValue(file, key, value string) error {
 	// If the key didn't exist, append it
 	if !exists {
 		lines = append(lines, fmt.Sprintf("%s=%s", key, value))
+	}
+
+	// Ensure parent directory exists
+	if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
+		return err
 	}
 
 	// Write the file
