@@ -27,13 +27,15 @@ info() {
 command -v go >/dev/null 2>&1 || die "Go is required but not installed. Install it from https://go.dev/dl/"
 command -v git >/dev/null 2>&1 || die "git is required but not installed."
 
+info "Install dir: $INSTALL_DIR (user: $(id -un), sudo: ${SUDO:-none})"
+
 info "Cloning BS3 repository..."
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 git clone --depth=1 "https://github.com/${REPO}.git" "$TMP_DIR/BS3" >/dev/null 2>&1
 
-info "Building bs3 CLI..."
+info "Building BS3 CLI..."
 rm -f "$TMP_DIR/BS3/go.work" "$TMP_DIR/BS3/go.work.sum"
 cd "$TMP_DIR/BS3/cli-tool"
 go build -o "$TMP_DIR/$BINARY_NAME" . 2>&1 || die "Build failed."
