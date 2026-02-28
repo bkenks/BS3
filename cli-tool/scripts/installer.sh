@@ -1,80 +1,42 @@
 #!/usr/bin/env sh
 set -e
 
-REPO="bkenks/bs3"
+REPO="bkenks/BS3"
 BINARY_NAME="bs3"
-VERSION=$(curl -fsSL https://api.github.com/repos/bkenks/bs3/releases/latest |
-    grep tag_name |
-    cut -d '"' -f4)
+INSTALL_DIR="$HOME/.local/bin"
 
 die() {
-    printf "\033[31m%s\033[0m\n" "$1" >&2
+    printf "\033[31mError: %s\033[0m\n" "$1" >&2
     exit 1
 }
 
-detect_platform() {
-    OS="$(uname | tr '[:upper:]' '[:lower:]')"
-
-    case "$(uname -m)" in
-    x86_64 | amd64) ARCH="amd64" ;;
-    arm64 | aarch64) ARCH="arm64" ;;
-    *) die "Unsupported architecture: $(uname -m)" ;;
-    esac
+info() {
+    printf "\033[32m%s\033[0m\n" "$1"
 }
 
-detect_fetch() {
-    if command -v curl >/dev/null 2>&1; then
-        FETCH="curl -fL"
-    elif command -v wget >/dev/null 2>&1; then
-        FETCH="wget -qO-"
-    else
-        die "curl or wget is required"
-    fi
-}
+command -v go >/dev/null 2>&1 || die "Go is required but not installed. Install it from https://go.dev/dl/"
+command -v git >/dev/null 2>&1 || die "git is required but not installed."
 
-install_binary() {
-    DEST="$HOME/.local/bin"
-    mkdir -p "$DEST"
+info "Cloning BS3 repository..."
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
 
-    FILE="${OS}_${ARCH}.zip"
-    URL="https://github.com/${REPO}/releases/download/${VERSION}/${FILE}"
+git clone --depth=1 "https://github.com/${REPO}.git" "$TMP_DIR/BS3" >/dev/null 2>&1
 
-    TMP_DIR="$(mktemp -d)"
-    ZIP_PATH="$TMP_DIR/$FILE"
+info "Building bs3 CLI..."
+cd "$TMP_DIR/BS3/cli-tool"
+go build -o "$TMP_DIR/$BINARY_NAME" . 2>&1 || die "Build failed."
 
-    printf "Downloading %s...\n" "$URL"
+mkdir -p "$INSTALL_DIR"
+mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
+chmod +x "$INSTALL_DIR/$BINARY_NAME"
 
-    if command -v curl >/dev/null 2>&1; then
-        curl -fL "$URL" -o "$ZIP_PATH"
-    else
-        wget "$URL" -O "$ZIP_PATH"
-    fi
+info "Installed to $INSTALL_DIR/$BINARY_NAME"
 
-    printf "Extracting...\n"
-    unzip -q "$ZIP_PATH" -d "$TMP_DIR"
-
-    # assumes zip contains the binary directly
-    if [ ! -f "$TMP_DIR/$BINARY_NAME" ]; then
-        die "Binary not found in archive."
-    fi
-
-    mv "$TMP_DIR/$BINARY_NAME" "$DEST/$BINARY_NAME"
-    chmod +x "$DEST/$BINARY_NAME"
-
-    rm -rf "$TMP_DIR"
-
-    printf "\n✅ Installed to %s/%s\n" "$DEST" "$BINARY_NAME"
-
-    if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
-        printf "\n⚠️  Add this to your shell config if command not found:\n"
-        printf "export PATH="$HOME/.local/bin:$PATH"\n\n"
-    fi
-}
-
-main() {
-    detect_platform
-    detect_fetch
-    install_binary
-}
-
-main "$@"
+case ":$PATH:" in
+    *":$INSTALL_DIR:"*) ;;
+    *)
+        printf "\n\033[33mAdd this to your shell config (~/.bashrc, ~/.zshrc, etc.):\033[0m\n"
+        printf '  export PATH="$HOME/.local/bin:$PATH"\n\n'
+        ;;
+esac

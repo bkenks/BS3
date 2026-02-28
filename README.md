@@ -141,16 +141,13 @@ volumes:
 
 The `/data` volume persists your encrypted database (`vault.db`) and salt file (`vault_salt`). Mount it to keep your vault across container restarts.
 
-### Build from Source
+### Build from Source (Server)
 
 ```bash
-git clone <repo-url>
-cd BS3
+git clone https://github.com/bkenks/BS3.git
+cd BS3/server
 
-# Build binary
 go build -o bs3-server ./cmd
-
-# Run
 ./bs3-server
 ./bs3-server --verbose   # enable debug logging
 ```
@@ -178,25 +175,130 @@ The image uses a multi-stage build — only the compiled binary ends up in the f
 
 BS3 ships with a companion CLI for interacting with the server. It supports both a standard command-line interface and a **TUI** (Terminal User Interface).
 
-```bash
-# Launch the TUI
-bs3 tui
+### Install the CLI
 
-# Command tree
-bs3
-├── openvault
-├── envject
-├── generatetoken
-├── set
-│   ├── apitoken
-│   ├── serverurl
-│   ├── username
-│   └── password
-└── list
-    ├── secrets
-    ├── users
-    └── tokens
+Requires Go and git. Builds from source and installs to `~/.local/bin/bs3`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bkenks/BS3/main/cli-tool/scripts/installer.sh | sh
 ```
+
+If `~/.local/bin` isn't on your `$PATH`, add this to your shell config (`~/.bashrc`, `~/.zshrc`, etc.):
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+### Configuration
+
+The CLI reads connection settings from `~/.config/bs3/bs3.env` (created and managed by `bs3 set`). You can also export these as environment variables directly.
+
+| Variable | Description |
+|---|---|
+| `BS3_SERVER_URL` | URL of the BS3 server (e.g. `http://localhost:8080`) |
+| `BS3_AUTH_METHOD` | `token` (default) or `basic` |
+| `BS3_API_TOKEN` | Bearer token — used when `BS3_AUTH_METHOD=token` |
+| `BS3_USERNAME` | Username — used when `BS3_AUTH_METHOD=basic` |
+| `BS3_PASSWORD` | Password — used when `BS3_AUTH_METHOD=basic` |
+
+```bash
+# Quickstart: configure with token auth
+bs3 set serverurl http://localhost:8080
+bs3 set apitoken <your-token>
+
+# Or use basic auth
+bs3 set serverurl http://localhost:8080
+bs3 set authmethod basic
+bs3 set username admin
+bs3 set password mypassword
+```
+
+### TUI
+
+```bash
+bs3 tui    # Launch the interactive terminal UI
+```
+
+### Vault Lifecycle
+
+```bash
+bs3 initvault <username> <password> <master_passphrase>
+# Initialize a fresh vault. Run once with the one-time init token
+# printed to the server's stdout.
+
+bs3 openvault <master_passphrase>
+# Unlock the vault after a server restart. Requires BS3_USERNAME
+# and BS3_PASSWORD to be set (uses Basic Auth).
+```
+
+### Secrets
+
+```bash
+bs3 store <name> <value>          # Store a secret
+bs3 get <name>                    # Print a secret value to stdout
+bs3 delete <name>                 # Delete a secret
+bs3 listsecrets                   # List all secrets with timestamps
+```
+
+#### Inject secrets into a process
+
+`envject` fetches secrets from the vault and injects them as environment variables into the given command. Secret names are uppercased as env var keys.
+
+```bash
+bs3 envject <secret1> [secret2...] -- <command> [args...]
+
+# Example: run a Node app with DB_PASSWORD and API_KEY injected
+bs3 envject db_password api_key -- node server.js
+```
+
+#### Write secrets to a tmpfs env file
+
+`writeenv` fetches secrets and writes them as `KEY=VALUE` pairs to `/dev/shm/bs3-<prefix>.env` (tmpfs, mode `0600`). Useful for passing secrets to tools that expect a `.env` file without touching disk.
+
+```bash
+bs3 writeenv <prefix> <secret1> [secret2...]
+# Writes to /dev/shm/bs3-<prefix>.env and prints the path
+
+bs3 rmenv <prefix>
+# Deletes /dev/shm/bs3-<prefix>.env
+
+# Example
+bs3 writeenv myapp db_password api_key
+# → /dev/shm/bs3-myapp.env
+# DB_PASSWORD=hunter2
+# API_KEY=abc123
+```
+
+### Tokens
+
+```bash
+bs3 generatetoken <name> [ttl_seconds]
+# Generate a Bearer token. ttl_seconds=0 means no expiry.
+# Prints the token name, value, and expiry.
+
+bs3 deletetoken <name>    # Delete a token
+bs3 listtokens            # List all tokens with expiry info
+```
+
+### Users
+
+```bash
+bs3 adduser <username> <password>    # Add a new user
+bs3 deleteuser <username>            # Delete a user
+bs3 listusers                        # List all users with creation timestamps
+```
+
+### Config
+
+```bash
+bs3 set serverurl <url>          # Set BS3_SERVER_URL
+bs3 set apitoken <token>         # Set BS3_API_TOKEN
+bs3 set username <username>      # Set BS3_USERNAME
+bs3 set password <password>      # Set BS3_PASSWORD
+bs3 set authmethod <token|basic> # Set BS3_AUTH_METHOD
+```
+
+All `set` commands write to `~/.config/bs3/bs3.env`.
 
 ---
 
