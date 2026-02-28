@@ -3,7 +3,12 @@ set -e
 
 REPO="bkenks/BS3"
 BINARY_NAME="bs3"
-INSTALL_DIR="$HOME/.local/bin"
+
+if [ -w /usr/local/bin ]; then
+    INSTALL_DIR="/usr/local/bin"
+else
+    INSTALL_DIR="$HOME/.local/bin"
+fi
 
 die() {
     printf "\033[31mError: %s\033[0m\n" "$1" >&2
@@ -38,6 +43,6 @@ case ":$PATH:" in
     *":$INSTALL_DIR:"*) ;;
     *)
         printf "\n\033[33mAdd this to your shell config (~/.bashrc, ~/.zshrc, etc.):\033[0m\n"
-        printf '  export PATH="$HOME/.local/bin:$PATH"\n\n'
+        printf '  export PATH="%s:$PATH"\n\n' "$INSTALL_DIR"
         ;;
 esac
