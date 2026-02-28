@@ -6,8 +6,13 @@ BINARY_NAME="bs3"
 
 if [ -w /usr/local/bin ]; then
     INSTALL_DIR="/usr/local/bin"
+    SUDO=""
+elif command -v sudo >/dev/null 2>&1; then
+    INSTALL_DIR="/usr/local/bin"
+    SUDO="sudo"
 else
     INSTALL_DIR="$HOME/.local/bin"
+    SUDO=""
 fi
 
 die() {
@@ -33,9 +38,9 @@ rm -f "$TMP_DIR/BS3/go.work" "$TMP_DIR/BS3/go.work.sum"
 cd "$TMP_DIR/BS3/cli-tool"
 go build -o "$TMP_DIR/$BINARY_NAME" . 2>&1 || die "Build failed."
 
-mkdir -p "$INSTALL_DIR"
-mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
-chmod +x "$INSTALL_DIR/$BINARY_NAME"
+$SUDO mkdir -p "$INSTALL_DIR"
+$SUDO mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
+$SUDO chmod +x "$INSTALL_DIR/$BINARY_NAME"
 
 info "Installed to $INSTALL_DIR/$BINARY_NAME"
 
