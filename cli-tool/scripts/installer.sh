@@ -3,15 +3,16 @@ set -e
 
 REPO="bkenks/BS3"
 BINARY_NAME="bs3"
+USER_INSTALL_DIR="$HOME/.local/bin"
 
 if [ -w /usr/local/bin ]; then
-    INSTALL_DIR="/usr/local/bin"
+    SYSTEM_INSTALL_DIR="/usr/local/bin"
     SUDO=""
 elif command -v sudo >/dev/null 2>&1; then
-    INSTALL_DIR="/usr/local/bin"
+    SYSTEM_INSTALL_DIR="/usr/local/bin"
     SUDO="sudo"
 else
-    INSTALL_DIR="$HOME/.local/bin"
+    SYSTEM_INSTALL_DIR=""
     SUDO=""
 fi
 
@@ -27,8 +28,6 @@ info() {
 command -v go >/dev/null 2>&1 || die "Go is required but not installed. Install it from https://go.dev/dl/"
 command -v git >/dev/null 2>&1 || die "git is required but not installed."
 
-info "Install dir: $INSTALL_DIR (user: $(id -un), sudo: ${SUDO:-none})"
-
 info "Cloning BS3 repository..."
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -40,16 +39,24 @@ rm -f "$TMP_DIR/BS3/go.work" "$TMP_DIR/BS3/go.work.sum"
 cd "$TMP_DIR/BS3/cli-tool"
 go build -o "$TMP_DIR/$BINARY_NAME" . 2>&1 || die "Build failed."
 
-$SUDO mkdir -p "$INSTALL_DIR"
-$SUDO mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
-$SUDO chmod +x "$INSTALL_DIR/$BINARY_NAME"
+# Install to ~/.local/bin (always)
+mkdir -p "$USER_INSTALL_DIR"
+cp "$TMP_DIR/$BINARY_NAME" "$USER_INSTALL_DIR/$BINARY_NAME"
+chmod +x "$USER_INSTALL_DIR/$BINARY_NAME"
+info "Installed to $USER_INSTALL_DIR/$BINARY_NAME"
 
-info "Installed to $INSTALL_DIR/$BINARY_NAME"
+# Also install to /usr/local/bin if available
+if [ -n "$SYSTEM_INSTALL_DIR" ]; then
+    $SUDO mkdir -p "$SYSTEM_INSTALL_DIR"
+    $SUDO cp "$TMP_DIR/$BINARY_NAME" "$SYSTEM_INSTALL_DIR/$BINARY_NAME"
+    $SUDO chmod +x "$SYSTEM_INSTALL_DIR/$BINARY_NAME"
+    info "Installed to $SYSTEM_INSTALL_DIR/$BINARY_NAME"
+fi
 
 case ":$PATH:" in
-    *":$INSTALL_DIR:"*) ;;
+    *":$USER_INSTALL_DIR:"*) ;;
     *)
         printf "\n\033[33mAdd this to your shell config (~/.bashrc, ~/.zshrc, etc.):\033[0m\n"
-        printf '  export PATH="%s:$PATH"\n\n' "$INSTALL_DIR"
+        printf '  export PATH="%s:$PATH"\n\n' "$USER_INSTALL_DIR"
         ;;
 esac
