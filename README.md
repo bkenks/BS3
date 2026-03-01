@@ -216,13 +216,19 @@ BS3 ships with a companion CLI for interacting with the server. It supports both
 Requires Go and git. Builds from source and installs to `~/.local/bin/bs3`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bkenks/BS3/main/cli-tool/scripts/installer.sh | sh
+curl -fsSL https://raw.githubusercontent.com/bkenks/BS3/main/cli-tool/scripts/install.sh | sh
 ```
 
 If `~/.local/bin` isn't on your `$PATH`, add this to your shell config (`~/.bashrc`, `~/.zshrc`, etc.):
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
+```
+
+### Uninstall the CLI
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bkenks/BS3/main/cli-tool/scripts/uninstall.sh | sh
 ```
 
 ### Configuration
