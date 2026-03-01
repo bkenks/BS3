@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -378,6 +379,18 @@ func Run(args []string) {
 	}
 }
 
+// loadEnvFile loads bs3.env into the process environment without overwriting
+// vars already set. File-not-found is silently ignored (expected in CI/container
+// environments where config is injected via env vars). Any other error (e.g.
+// permission denied) is logged as a warning.
+func loadEnvFile() {
+	if err := godotenv.Load(constants.BS3EnvPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		l.LogAddInfo(l.Logger.Warn,
+			"could not load bs3.env, falling back to environment variables",
+			"bs3.env", constants.BS3EnvPath, "err", err)
+	}
+}
+
 // ~~~ getArgSafe ~~~
 func getArgSafe(args []string, arg int, usage string) string {
 	if len(args) < arg+1 {
@@ -389,11 +402,7 @@ func getArgSafe(args []string, arg int, usage string) string {
 
 // ~~~ configureAPIClient ~~~
 func configureAPIClient() *apiclient.Client {
-	if err := godotenv.Load(constants.BS3EnvPath); err != nil {
-		l.LogAddInfo(l.Logger.Info,
-			"variables not set in bs3.env, using global env",
-			"bs3.env", constants.BS3EnvPath)
-	}
+	loadEnvFile()
 
 	token := os.Getenv(constants.ENV_VAR_BS3_TOKEN)
 	baseURL := os.Getenv(constants.ENV_VAR_BS3_URL)
@@ -428,11 +437,7 @@ func configureAPIClient() *apiclient.Client {
 // ~~~ openVault ~~~
 // loads credentials from env and calls the /openvault endpoint with basic auth
 func openVault(masterPassphrase string) {
-	if err := godotenv.Load(constants.BS3EnvPath); err != nil {
-		l.LogAddInfo(l.Logger.Info,
-			"variables not set in bs3.env, using global env",
-			"bs3.env", constants.BS3EnvPath)
-	}
+	loadEnvFile()
 
 	baseURL := os.Getenv(constants.ENV_VAR_BS3_URL)
 	username := os.Getenv(constants.ENV_VAR_BS3_USERNAME)

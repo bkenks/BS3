@@ -38,12 +38,12 @@ func SetEnvValue(file, key, value string) error {
 	}
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(file), 0755); err != nil {
 		return err
 	}
 
 	// Write the file
-	f2, err := os.Create(file)
+	f2, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
