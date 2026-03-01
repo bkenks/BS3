@@ -37,7 +37,7 @@ git clone --depth=1 "https://github.com/${REPO}.git" "$TMP_DIR/BS3" >/dev/null 2
 info "Building BS3 CLI..."
 rm -f "$TMP_DIR/BS3/go.work" "$TMP_DIR/BS3/go.work.sum"
 cd "$TMP_DIR/BS3/cli-tool"
-go build -o "$TMP_DIR/$BINARY_NAME" . 2>&1 || die "Build failed."
+CGO_ENABLED=0 go build -o "$TMP_DIR/$BINARY_NAME" . 2>&1 || die "Build failed."
 
 # Install to ~/.local/bin (always)
 mkdir -p "$USER_INSTALL_DIR"
