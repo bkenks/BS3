@@ -8,6 +8,32 @@ import (
 	"strings"
 )
 
+// ParseEnvFile reads a .env file and returns its contents as a map.
+// Blank lines and lines beginning with # are ignored. Values may contain
+// additional = characters; only the first = is used as the delimiter.
+func ParseEnvFile(file string) (map[string]string, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	result := make(map[string]string)
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		idx := strings.Index(line, "=")
+		if idx < 0 {
+			continue
+		}
+		result[line[:idx]] = line[idx+1:]
+	}
+	return result, scanner.Err()
+}
+
 // SetEnvValue writes or updates a key=value in a .env file
 func SetEnvValue(file, key, value string) error {
 	lines := []string{}

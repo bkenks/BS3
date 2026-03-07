@@ -40,13 +40,15 @@ var (
 	argOpenVault = "openvault"
 
 	// Secrets
-	argEnvject    = "envject"
-	argGet        = "get"
-	argStore      = "store"
-	argDelete     = "delete"
-	argListSecret = "listsecrets"
-	argWriteEnv   = "writeenv"
-	argRmEnv      = "rmenv"
+	argEnvject      = "envject"
+	argGet          = "get"
+	argStore        = "store"
+	argDelete       = "delete"
+	argListSecret   = "listsecrets"
+	argWriteEnv     = "writeenv"
+	argRmEnv        = "rmenv"
+	argExportSecrets = "exportenv"
+	argImportSecrets = "importenv"
 
 	// Tokens
 	argGenerateToken = "generatetoken"
@@ -82,6 +84,8 @@ SECRETS:
     writeenv <prefix> <secret1>            Write secrets as KEY=VALUE pairs to
                 [secret2...]               /dev/shm/bs3-<prefix>.env (tmpfs, 0600)
     rmenv <prefix>                          Delete /dev/shm/bs3-<prefix>.env
+    exportenv <output_file>                Export all secrets to a KEY=VALUE env file (0600)
+    importenv <input_file>                 Import secrets from a KEY=VALUE env file
 
 TOKENS:
     generatetoken <name> [ttl_seconds]      Generate a Bearer token (0 = no expiry)
@@ -240,6 +244,61 @@ func Run(args []string) {
 			os.Exit(1)
 		}
 		fmt.Printf("removed %s\n", envPath)
+
+	case argExportSecrets:
+		outPath := getArgSafe(args, 1, fmt.Sprintf("bs3 %s <output_file>", argExportSecrets))
+		client := configureAPIClient()
+		metas, err := client.ListSecretsMeta()
+		if err != nil {
+			l.LogError(l.Logger.Error, "error listing secrets", "err", err)
+			os.Exit(1)
+		}
+		if len(metas) == 0 {
+			fmt.Println("no secrets found")
+			return
+		}
+		f, err := os.OpenFile(outPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+		if err != nil {
+			l.LogError(l.Logger.Error, "error creating output file", "path", outPath, "err", err)
+			os.Exit(1)
+		}
+		for _, meta := range metas {
+			sec, err := client.GetSecret(meta.Name)
+			if err != nil {
+				f.Close()
+				l.LogError(l.Logger.Error, "error fetching secret", "name", meta.Name, "err", err)
+				os.Exit(1)
+			}
+			if _, err := fmt.Fprintf(f, "%s=%s\n", sec["name"], sec["secret"]); err != nil {
+				f.Close()
+				l.LogError(l.Logger.Error, "error writing to output file", "path", outPath, "err", err)
+				os.Exit(1)
+			}
+		}
+		f.Close()
+		fmt.Printf("exported %d secret(s) to %s\n", len(metas), outPath)
+
+	case argImportSecrets:
+		inPath := getArgSafe(args, 1, fmt.Sprintf("bs3 %s <input_file>", argImportSecrets))
+		parsed, err := enveditor.ParseEnvFile(inPath)
+		if err != nil {
+			l.LogError(l.Logger.Error, "error reading env file", "path", inPath, "err", err)
+			os.Exit(1)
+		}
+		if len(parsed) == 0 {
+			fmt.Println("no entries found in file")
+			return
+		}
+		client := configureAPIClient()
+		var count int
+		for name, value := range parsed {
+			if err := client.StoreSecret(name, value); err != nil {
+				l.LogError(l.Logger.Error, "error storing secret", "name", name, "err", err)
+				os.Exit(1)
+			}
+			count++
+		}
+		fmt.Printf("imported %d secret(s)\n", count)
 
 	// ─── Tokens ───────────────────────────────────────────────────────────────
 	case argGenerateToken:
