@@ -8,7 +8,10 @@ USER_INSTALL_DIR="$HOME/.local/bin"
 if [ -w /usr/local/bin ]; then
     SYSTEM_INSTALL_DIR="/usr/local/bin"
     SUDO=""
-elif command -v sudo >/dev/null 2>&1; then
+elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+    # sudo works without a password prompt (cached creds or NOPASSWD).
+    # We skip the system install otherwise, since `curl | sh` has no TTY
+    # for sudo to read a password from.
     SYSTEM_INSTALL_DIR="/usr/local/bin"
     SUDO="sudo"
 else
@@ -32,11 +35,13 @@ info "Cloning BS3 repository..."
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-git clone --depth=1 "https://github.com/${REPO}.git" "$TMP_DIR/BS3" >/dev/null 2>&1
+# Clone into "src" rather than "BS3" — on case-insensitive filesystems (macOS
+# default) a "BS3" directory and the "bs3" build output would collide.
+git clone --depth=1 "https://github.com/${REPO}.git" "$TMP_DIR/src" >/dev/null 2>&1
 
 info "Building BS3 CLI..."
-rm -f "$TMP_DIR/BS3/go.work" "$TMP_DIR/BS3/go.work.sum"
-cd "$TMP_DIR/BS3/cli-tool"
+rm -f "$TMP_DIR/src/go.work" "$TMP_DIR/src/go.work.sum"
+cd "$TMP_DIR/src/cli-tool"
 CGO_ENABLED=0 go build -o "$TMP_DIR/$BINARY_NAME" . 2>&1 || die "Build failed."
 
 # Install to ~/.local/bin (always)
