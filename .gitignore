@@ -37,3 +37,10 @@ profile.cov
 
 # Testing
 .testing/
+.builds/
+
+# Compiled binaries (build artifacts)
+/bs3dev
+/dev/bs3dev
+/server/bs3-server
+/cli-tool/bs3

@@ -29,14 +29,14 @@ type ModelManager struct {
 	mainMenu *menu.Model
 
 	// Menu dialogs
-	initVaultDlg      *menu.InitVaultDialog
-	openVaultDlg      *menu.OpenVaultDialog
-	errDialog         *menu.ErrorDialog
-	setTokenDlg       *menu.SetAPITokenDialog
-	setURLDlg         *menu.SetServerURLDialog
-	setUsernameDlg    *menu.SetUsernameDialog
-	setPasswordDlg    *menu.SetPasswordDialog
-	setAuthMethodDlg  *menu.SetAuthMethodDialog
+	initVaultDlg     *menu.InitVaultDialog
+	openVaultDlg     *menu.OpenVaultDialog
+	errDialog        *menu.ErrorDialog
+	setTokenDlg      *menu.SetAPITokenDialog
+	setURLDlg        *menu.SetServerURLDialog
+	setUsernameDlg   *menu.SetUsernameDialog
+	setPasswordDlg   *menu.SetPasswordDialog
+	setAuthMethodDlg *menu.SetAuthMethodDialog
 
 	// List models (persistent, hold pointer to m.client)
 	secretsList *secrets.Model
@@ -44,9 +44,12 @@ type ModelManager struct {
 	usersList   *users.Model
 
 	// Dialog models (recreated on each activation)
-	secretView   *secrets.ViewDialog
-	secretCreate *secrets.CreateDialog
-	secretDelete *secrets.DeleteDialog
+	secretView      *secrets.ViewDialog
+	secretCreate    *secrets.CreateDialog
+	secretDelete    *secrets.DeleteDialog
+	secretMove      *secrets.MoveDialog
+	secretEdit      *secrets.EditDialog
+	secretNewFolder *secrets.CreateFolderDialog
 
 	tokenView      *tokens.ViewDialog
 	tokenGenerate  *tokens.GenerateDialog
@@ -137,7 +140,7 @@ func (m *ModelManager) switchState(state shared.SessionState) tea.Cmd {
 
 	case shared.StateViewSecret:
 		if item, ok := m.secretsList.SelectedItem(); ok {
-			m.secretView = secrets.NewViewDialog(item.Name, m.client)
+			m.secretView = secrets.NewViewDialog(item.Name, item.Folder, m.client)
 			m.active = m.secretView
 			return m.secretView.Init()
 		}
@@ -145,18 +148,42 @@ func (m *ModelManager) switchState(state shared.SessionState) tea.Cmd {
 		m.active = m.secretsList
 
 	case shared.StateNewSecret:
-		m.secretCreate = secrets.NewCreateDialog(m.client)
+		// Default the new secret's folder to whatever folder is currently open.
+		m.secretCreate = secrets.NewCreateDialog(m.client, m.secretsList.CurrentFolder())
 		m.active = m.secretCreate
 		return m.secretCreate.Init()
 
 	case shared.StateDeleteSecret:
 		if item, ok := m.secretsList.SelectedItem(); ok {
-			m.secretDelete = secrets.NewDeleteDialog(item.Name, m.client)
+			m.secretDelete = secrets.NewDeleteDialog(item.Name, item.Folder, m.client)
 			m.active = m.secretDelete
 		} else {
 			m.state = shared.StateSecretsList
 			m.active = m.secretsList
 		}
+
+	case shared.StateMoveSecret:
+		if item, ok := m.secretsList.SelectedItem(); ok {
+			m.secretMove = secrets.NewMoveDialog(item.Name, item.Folder, m.client)
+			m.active = m.secretMove
+			return m.secretMove.Init()
+		}
+		m.state = shared.StateSecretsList
+		m.active = m.secretsList
+
+	case shared.StateEditSecret:
+		if item, ok := m.secretsList.SelectedItem(); ok {
+			m.secretEdit = secrets.NewEditDialog(item.Name, item.Folder, m.client)
+			m.active = m.secretEdit
+			return m.secretEdit.Init()
+		}
+		m.state = shared.StateSecretsList
+		m.active = m.secretsList
+
+	case shared.StateNewFolder:
+		m.secretNewFolder = secrets.NewCreateFolderDialog(m.client)
+		m.active = m.secretNewFolder
+		return m.secretNewFolder.Init()
 
 	case shared.StateViewToken:
 		if item, ok := m.tokensList.SelectedItem(); ok {
@@ -227,6 +254,12 @@ func (m *ModelManager) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch m.state {
 			case shared.StateSecretsList:
 				if m.secretsList.List.FilterState() == list.Unfiltered {
+					// Inside a folder, ESC walks up one level instead of
+					// leaving the secrets browser entirely.
+					if m.secretsList.InFolder() {
+						m.secretsList.GoUp()
+						return m, nil
+					}
 					return m, m.switchState(shared.StateMainMenu)
 				}
 			case shared.StateTokensList:
@@ -282,7 +315,7 @@ func (m *ModelManager) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case events.SecretsRefreshed:
-			m.secretsList.SetItems(ev.Secrets)
+			m.secretsList.SetItems(ev.Secrets, ev.Folders)
 			return m, nil
 
 		case events.SecretFetched:
@@ -299,6 +332,27 @@ func (m *ModelManager) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 
 		case events.SecretDeleted:
+			cmds = append(cmds,
+				m.switchState(shared.StateSecretsList),
+				m.secretsList.RefreshCmd(),
+			)
+			return m, tea.Batch(cmds...)
+
+		case events.SecretMoved:
+			cmds = append(cmds,
+				m.switchState(shared.StateSecretsList),
+				m.secretsList.RefreshCmd(),
+			)
+			return m, tea.Batch(cmds...)
+
+		case events.SecretEdited:
+			cmds = append(cmds,
+				m.switchState(shared.StateSecretsList),
+				m.secretsList.RefreshCmd(),
+			)
+			return m, tea.Batch(cmds...)
+
+		case events.FolderCreated:
 			cmds = append(cmds,
 				m.switchState(shared.StateSecretsList),
 				m.secretsList.RefreshCmd(),
@@ -345,9 +399,10 @@ func (m *ModelManager) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case events.APIError:
 			// Show a dedicated error dialog for top-level flows (vault lifecycle and
 			// list entry points). Sub-form dialogs (create, delete, generate, etc.)
-			// continue to display errors inline via their status message.
+			// — including Initialize Vault — display errors inline via their
+			// status message so the entered field values are preserved.
 			switch m.state {
-			case shared.StateOpenVault, shared.StateInitVault,
+			case shared.StateOpenVault,
 				shared.StateSecretsList, shared.StateTokensList, shared.StateUsersList:
 				m.errDialog = menu.NewErrorDialog(ev.Err.Error())
 				cmds = append(cmds, m.switchState(shared.StateErrorDialog))

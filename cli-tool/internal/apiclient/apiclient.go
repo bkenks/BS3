@@ -2,6 +2,7 @@ package apiclient
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,6 +10,18 @@ import (
 	"strings"
 	"time"
 )
+
+// ErrSecretExists is returned when a secret with the given name already exists
+// in the target folder (server responds 409).
+var ErrSecretExists = errors.New("secret already exists in that folder")
+
+// ErrSecretNotFound is returned when the requested secret does not exist
+// (server responds 404).
+var ErrSecretNotFound = errors.New("secret not found")
+
+// ErrFolderExists is returned when a folder with the given name already exists
+// (server responds 409).
+var ErrFolderExists = errors.New("folder already exists")
 
 type Client struct {
 	BaseURL    string
@@ -43,10 +56,11 @@ func (c *Client) setAuth(req *http.Request) {
 }
 
 // ~~~ GetSecret ~~~
-// sends GET http request to BS3 server to retreive secret by name
-// returning a map with the name and secret value
-func (c *Client) GetSecret(name string) (map[string]string, error) {
-	endpoint := fmt.Sprintf("%s/get?name=%s", c.BaseURL, url.QueryEscape(name))
+// sends GET http request to BS3 server to retreive a secret by name and folder
+// returning a map with the name, folder, and secret value
+func (c *Client) GetSecret(name, folder string) (map[string]string, error) {
+	endpoint := fmt.Sprintf("%s/get?name=%s&folder=%s",
+		c.BaseURL, url.QueryEscape(name), url.QueryEscape(folder))
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -59,6 +73,9 @@ func (c *Client) GetSecret(name string) (map[string]string, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrSecretNotFound
+	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("error fetching secret: %s", body)
@@ -105,6 +122,7 @@ func (c *Client) ListSecrets() ([]string, error) {
 // SecretMeta holds metadata about a secret returned from the BS3 server.
 type SecretMeta struct {
 	Name      string `json:"Name"`
+	Folder    string `json:"Folder"`
 	CreatedAt string `json:"CreatedAt"`
 	UpdatedAt string `json:"UpdatedAt"`
 }
@@ -330,9 +348,10 @@ func (c *Client) DeleteToken(name string) error {
 }
 
 // ~~~ DeleteSecret ~~~
-// sends a DELETE http request to BS3 server to delete a secret by name
-func (c *Client) DeleteSecret(name string) error {
-	endpoint := fmt.Sprintf("%s/delete?name=%s", c.BaseURL, url.QueryEscape(name))
+// sends a DELETE http request to BS3 server to delete a secret by name and folder
+func (c *Client) DeleteSecret(name, folder string) error {
+	endpoint := fmt.Sprintf("%s/delete?name=%s&folder=%s",
+		c.BaseURL, url.QueryEscape(name), url.QueryEscape(folder))
 	req, err := http.NewRequest("DELETE", endpoint, nil)
 	if err != nil {
 		return err
@@ -345,6 +364,9 @@ func (c *Client) DeleteSecret(name string) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return ErrSecretNotFound
+	}
 	if resp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("error deleting secret: %s", body)
@@ -422,12 +444,13 @@ func (c *Client) OpenVault(username, password, masterPassphrase string) ([]byte,
 }
 
 // ~~~ StoreSecret ~~~
-// sends a POST http request to BS3 server to send a secret name and value
-// to be encrypted and stored in the vault
-func (c *Client) StoreSecret(name, value string) error {
+// sends a POST http request to BS3 server to send a secret name, value, and
+// folder to be encrypted and stored in the vault
+func (c *Client) StoreSecret(name, value, folder string) error {
 	payload := map[string]string{
 		"name":   name,
 		"secret": value,
+		"folder": folder,
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -448,9 +471,162 @@ func (c *Client) StoreSecret(name, value string) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusConflict {
+		return ErrSecretExists
+	}
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("error storing secret: %s", body)
+	}
+
+	return nil
+}
+
+// ~~~ EditSecret ~~~
+// sends a POST http request to BS3 server to update an existing secret's value
+// for a given name and folder
+func (c *Client) EditSecret(name, folder, value string) error {
+	payload := map[string]string{
+		"name":   name,
+		"folder": folder,
+		"secret": value,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	endpoint := fmt.Sprintf("%s/editsecret", c.BaseURL)
+	req, err := http.NewRequest("POST", endpoint, strings.NewReader(string(data)))
+	if err != nil {
+		return err
+	}
+	c.setAuth(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return ErrSecretNotFound
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("error editing secret: %s", body)
+	}
+
+	return nil
+}
+
+// ~~~ FolderMeta ~~~
+// holds metadata about a folder returned from the BS3 server.
+type FolderMeta struct {
+	Folder      string `json:"folder"`
+	SecretCount int    `json:"secret_count"`
+}
+
+// ~~~ ListFolders ~~~
+// sends a GET http request to BS3 server to retrieve all folder metadata
+func (c *Client) ListFolders() ([]FolderMeta, error) {
+	endpoint := fmt.Sprintf("%s/listfolders", c.BaseURL)
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setAuth(req)
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("error listing folders: %s", body)
+	}
+
+	var folders []FolderMeta
+	if err := json.NewDecoder(resp.Body).Decode(&folders); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
+	}
+
+	return folders, nil
+}
+
+// ~~~ CreateFolder ~~~
+// sends a POST http request to BS3 server to create an empty folder
+func (c *Client) CreateFolder(folder string) error {
+	payload := map[string]string{"folder": folder}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	endpoint := fmt.Sprintf("%s/createfolder", c.BaseURL)
+	req, err := http.NewRequest("POST", endpoint, strings.NewReader(string(data)))
+	if err != nil {
+		return err
+	}
+	c.setAuth(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusConflict {
+		return ErrFolderExists
+	}
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("error creating folder: %s", body)
+	}
+
+	return nil
+}
+
+// ~~~ MoveSecret ~~~
+// sends a POST http request to BS3 server to move a secret from one folder to another
+func (c *Client) MoveSecret(name, fromFolder, toFolder string) error {
+	payload := map[string]string{
+		"name":        name,
+		"from_folder": fromFolder,
+		"to_folder":   toFolder,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	endpoint := fmt.Sprintf("%s/movesecret", c.BaseURL)
+	req, err := http.NewRequest("POST", endpoint, strings.NewReader(string(data)))
+	if err != nil {
+		return err
+	}
+	c.setAuth(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return ErrSecretNotFound
+	}
+	if resp.StatusCode == http.StatusConflict {
+		return ErrSecretExists
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("error moving secret: %s", body)
 	}
 
 	return nil

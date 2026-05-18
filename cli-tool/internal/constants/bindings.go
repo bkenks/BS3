@@ -91,32 +91,58 @@ func (k defaultKeyMap) HelpBinds(helpType HelpType) func() []key.Binding {
 
 type secretListKeyMap struct {
 	Select    key.Binding
+	Back      key.Binding
 	NewSecret key.Binding
+	NewFolder key.Binding
 	Delete    key.Binding
+	Move      key.Binding
+	Edit      key.Binding
 }
 
 var SecretListKeyMap = secretListKeyMap{
 	Select: key.NewBinding(
-		key.WithKeys(tea.KeyTab.String()),            // actual keybindings
-		key.WithHelp(tea.KeyTab.String(), unsetText), // corresponding help text
+		key.WithKeys(tea.KeyEnter.String(), tea.KeyTab.String()), // open folder / view secret
+		key.WithHelp(tea.KeyEnter.String(), unsetText),           // corresponding help text
+	),
+	Back: key.NewBinding(
+		key.WithKeys(tea.KeyEsc.String()),
+		key.WithHelp(tea.KeyEsc.String(), unsetText),
 	),
 	NewSecret: key.NewBinding(
 		key.WithKeys(tea.KeyCtrlN.String()),
 		key.WithHelp(tea.KeyCtrlN.String(), unsetText),
 	),
+	NewFolder: key.NewBinding(
+		key.WithKeys(tea.KeyCtrlD.String()),
+		key.WithHelp(tea.KeyCtrlD.String(), unsetText),
+	),
 	Delete: key.NewBinding(
 		key.WithKeys(tea.KeyCtrlBackslash.String()),
 		key.WithHelp(tea.KeyCtrlBackslash.String(), unsetText),
+	),
+	Move: key.NewBinding(
+		key.WithKeys(tea.KeyCtrlF.String()),
+		key.WithHelp(tea.KeyCtrlF.String(), unsetText),
+	),
+	Edit: key.NewBinding(
+		key.WithKeys(tea.KeyCtrlE.String()),
+		key.WithHelp(tea.KeyCtrlE.String(), unsetText),
 	),
 }
 
 func (k secretListKeyMap) HelpBinds(helpType HelpType) func() []key.Binding {
 	bindsWithHelp := []key.Binding{
 		SetOnHelpType(
-			helpType,                // Short or Full Help
-			SecretListKeyMap.Select, // key.Binding
-			"view",                  // Short Help
-			"view secret",           // Full Help
+			helpType,                    // Short or Full Help
+			SecretListKeyMap.Select,     // key.Binding
+			"open",                      // Short Help
+			"open folder / view secret", // Full Help
+		),
+		SetOnHelpType(
+			helpType,
+			SecretListKeyMap.Back,
+			"back",
+			"back / up a folder",
 		),
 		SetOnHelpType(
 			helpType,
@@ -126,9 +152,27 @@ func (k secretListKeyMap) HelpBinds(helpType HelpType) func() []key.Binding {
 		),
 		SetOnHelpType(
 			helpType,
+			SecretListKeyMap.NewFolder,
+			"new folder",
+			"new folder",
+		),
+		SetOnHelpType(
+			helpType,
 			SecretListKeyMap.Delete,
 			"delete",
 			"delete secret",
+		),
+		SetOnHelpType(
+			helpType,
+			SecretListKeyMap.Move,
+			"move",
+			"move to folder",
+		),
+		SetOnHelpType(
+			helpType,
+			SecretListKeyMap.Edit,
+			"edit",
+			"edit secret value",
 		),
 	}
 

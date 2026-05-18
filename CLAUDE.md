@@ -21,13 +21,14 @@ All commands run from within the respective module directory.
 ### Server (`cd server/`)
 
 ```bash
-go run ./cmd/              # Run dev server (or use ./bs3server.sh)
+go run ./cmd/              # Run dev server
 go build -o bs3-server ./cmd  # Build binary
-./builddocker.sh           # build Docker image (run from any directory)
 go test ./...              # Run all tests
 go test ./internal/cryptoutil/... -run TestFunctionName  # Run specific test
 go vet ./...               # Lint
 ```
+
+Building/releasing the Docker image is done from the repo root: `docker compose up --build` for a local test image, or `./scripts/release.sh` to build multi-platform and push to Docker Hub.
 
 Server flags: `--verbose` (debug logging). Configure port via `VAULT_API_PORT` env var (default: 8080).
 
@@ -35,15 +36,16 @@ Server flags: `--verbose` (debug logging). Configure port via `VAULT_API_PORT` e
 
 ```bash
 go run .                   # Run CLI
-./build.sh                 # Cross-compile for linux/amd64 and linux/arm64
 go test ./...
 go vet ./...
 ```
 
+Cross-compiling the CLI is done from the `bs3dev` hub (`go run ./dev/`, then "CLI › Cross-Compile Build").
+
 ### Logger (`cd logger/`)
 
 ```bash
-./test.sh                  # Run logger tests
+go run ./cmd/              # Run logger tests
 ```
 
 ## Architecture
@@ -68,6 +70,8 @@ go vet ./...
 3. Master key = Argon2id(passphrase + salt) — derived at runtime, never written to disk
 
 **Auth:** `authMiddleware` accepts Bearer tokens (HMAC-SHA256 signed with master key, optional TTL) or HTTP Basic Auth (Argon2-hashed passwords in `users` table). A background goroutine cleans expired tokens every 24 hours.
+
+**Secrets schema:** Each row in the `secrets` table carries an optional free-text `folder` tag column used for grouping (empty = ungrouped). The unique key is the pair `(name, folder)` — the same name may exist in different folders. On startup the server's `migrateSchema` auto-migrates older vaults: it `ALTER TABLE`s in the `folder` column if missing, then, if the table still lacks the composite `UNIQUE(name, folder)` constraint, rebuilds the `secrets` table in a transaction (create new → copy rows → drop → rename). Folder names are validated server-side (max 128 chars, no control characters). `StoreSecret` is create-only and returns `vault.ErrSecretExists` (mapped to HTTP 409) on a duplicate `(name, folder)`; `EditSecret` updates an existing secret's value and returns `vault.ErrSecretNotFound` (HTTP 404) if absent. A separate `folders` table (also created by `migrateSchema`) holds explicitly-created folders so an empty folder can exist on its own; `ListFolders` returns the union of secret-derived folders and `folders`-table rows (empty ones with count 0), and `CreateFolder` returns `vault.ErrFolderExists` (HTTP 409) on a duplicate. Secret endpoints: `/store` (create), `/editsecret` (update value), `/get?name=&folder=`, `/delete?name=&folder=`, `/movesecret` (`{"name","from_folder","to_folder"}`, 409 on destination collision), `/listsecrets`, `/listfolders`, `/createfolder`. The CLI addresses secrets as `folder.name` (split on the first `.`; no dot = root).
 
 ### CLI Internals
 

@@ -15,12 +15,13 @@ import (
 
 type DeleteDialog struct {
 	name      string
+	folder    string
 	statusMsg string
 	client    apiclient.Client
 }
 
-func NewDeleteDialog(name string, client apiclient.Client) *DeleteDialog {
-	return &DeleteDialog{name: name, client: client}
+func NewDeleteDialog(name, folder string, client apiclient.Client) *DeleteDialog {
+	return &DeleteDialog{name: name, folder: folder, client: client}
 }
 
 func (m *DeleteDialog) Init() tea.Cmd           { return nil }
@@ -42,7 +43,7 @@ func (m *DeleteDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *DeleteDialog) deleteCmd() tea.Cmd {
 	return func() tea.Msg {
-		if err := m.client.DeleteSecret(m.name); err != nil {
+		if err := m.client.DeleteSecret(m.name, m.folder); err != nil {
 			return events.APIError{Err: err}
 		}
 		return events.SecretDeleted{}

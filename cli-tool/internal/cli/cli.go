@@ -40,13 +40,17 @@ var (
 	argOpenVault = "openvault"
 
 	// Secrets
-	argEnvject      = "envject"
-	argGet          = "get"
-	argStore        = "store"
-	argDelete       = "delete"
-	argListSecret   = "listsecrets"
-	argWriteEnv     = "writeenv"
-	argRmEnv        = "rmenv"
+	argEnvject       = "envject"
+	argGet           = "get"
+	argStore         = "store"
+	argEdit          = "edit"
+	argDelete        = "delete"
+	argListSecret    = "listsecrets"
+	argListFolders   = "listfolders"
+	argCreateFolder  = "createfolder"
+	argMoveSecret    = "movesecret"
+	argWriteEnv      = "writeenv"
+	argRmEnv         = "rmenv"
 	argExportSecrets = "exportenv"
 	argImportSecrets = "importenv"
 
@@ -60,6 +64,15 @@ var (
 	argDeleteUser = "deleteuser"
 	argListUsers  = "listusers"
 )
+
+// parseSecretRef splits "folder.name" on the first dot.
+// No dot => root folder ("") and the whole string as the name.
+func parseSecretRef(ref string) (folder, name string) {
+	if i := strings.IndexByte(ref, '.'); i >= 0 {
+		return ref[:i], ref[i+1:]
+	}
+	return "", ref
+}
 
 // ~~~ printHelp ~~~
 func printHelp() {
@@ -75,17 +88,26 @@ VAULT LIFECYCLE:
     openvault <master_passphrase>           Unlock the vault (required after every restart)
 
 SECRETS:
-    get <name>                              Fetch and print a secret value
-    store <name> <value>                    Store a new secret
-    delete <name>                           Delete a secret
-    listsecrets                             List all secrets (name, created, updated)
-    envject <secret1> [secret2...] --       Fetch secrets and inject them as env vars
-                <command> [args...]         into the given command
-    writeenv <prefix> <secret1>            Write secrets as KEY=VALUE pairs to
-                [secret2...]               /dev/shm/bs3-<prefix>.env (tmpfs, 0600)
+    Secrets are addressed as folder.name (split on the first dot). A bare
+    name with no dot refers to the root/ungrouped folder.
+
+    get <folder.name>                       Fetch and print a secret value
+    store <folder.name> <value>             Store a new secret
+    edit <folder.name> <value>              Update the value of an existing secret
+    delete <folder.name>                    Delete a secret
+    listsecrets [folder]                    List secrets (name, folder, created, updated);
+                                            optional folder filters by exact match
+    listfolders                             List all folders and their secret counts
+    createfolder <folder>                   Create a new empty folder
+    movesecret <folder.name> <to_folder>    Move a secret to another folder
+    envject <folder.name> [folder.name...]  Fetch secrets and inject them as env vars
+                -- <command> [args...]      into the given command
+    writeenv <prefix> <folder.name>        Write secrets as KEY=VALUE pairs to
+                [folder.name...]           /dev/shm/bs3-<prefix>.env (tmpfs, 0600)
     rmenv <prefix>                          Delete /dev/shm/bs3-<prefix>.env
     exportenv <output_file>                Export all secrets to a KEY=VALUE env file (0600)
-    importenv <input_file>                 Import secrets from a KEY=VALUE env file
+    importenv <input_file> [folder]        Import secrets from a KEY=VALUE env file
+                                            into an optional folder (skips duplicates)
 
 TOKENS:
     generatetoken <name> [ttl_seconds]      Generate a Bearer token (0 = no expiry)
@@ -160,36 +182,69 @@ func Run(args []string) {
 		inject(*client, env, args)
 
 	case argGet:
-		name := getArgSafe(args, 1, fmt.Sprintf("bs3 %s <name>", argGet))
+		ref := getArgSafe(args, 1, fmt.Sprintf("bs3 %s <folder.name>", argGet))
+		folder, name := parseSecretRef(ref)
 		client := configureAPIClient()
-		sec, err := client.GetSecret(name)
+		sec, err := client.GetSecret(name, folder)
 		if err != nil {
-			l.LogError(l.Logger.Error, "error fetching secret", "name", name, "err", err)
+			l.LogError(l.Logger.Error, "error fetching secret", "name", name, "folder", folder, "err", err)
 			os.Exit(1)
 		}
 		fmt.Println(sec["secret"])
 
 	case argStore:
-		usage := fmt.Sprintf("bs3 %s <name> <value>", argStore)
-		name := getArgSafe(args, 1, usage)
+		usage := fmt.Sprintf("bs3 %s <folder.name> <value>", argStore)
+		ref := getArgSafe(args, 1, usage)
 		value := getArgSafe(args, 2, usage)
+		folder, name := parseSecretRef(ref)
 		client := configureAPIClient()
-		if err := client.StoreSecret(name, value); err != nil {
-			l.LogError(l.Logger.Error, "error storing secret", "name", name, "err", err)
+		if err := client.StoreSecret(name, value, folder); err != nil {
+			if errors.Is(err, apiclient.ErrSecretExists) {
+				fmt.Fprintf(os.Stderr,
+					"secret %q already exists in folder %q; use 'bs3 edit %s <value>' to update it\n",
+					name, folder, ref)
+				os.Exit(1)
+			}
+			l.LogError(l.Logger.Error, "error storing secret", "name", name, "folder", folder, "err", err)
 			os.Exit(1)
 		}
 		fmt.Printf("secret %q stored successfully\n", name)
 
-	case argDelete:
-		name := getArgSafe(args, 1, fmt.Sprintf("bs3 %s <name>", argDelete))
+	case argEdit:
+		usage := fmt.Sprintf("bs3 %s <folder.name> <value>", argEdit)
+		ref := getArgSafe(args, 1, usage)
+		value := getArgSafe(args, 2, usage)
+		folder, name := parseSecretRef(ref)
 		client := configureAPIClient()
-		if err := client.DeleteSecret(name); err != nil {
-			l.LogError(l.Logger.Error, "error deleting secret", "name", name, "err", err)
+		if err := client.EditSecret(name, folder, value); err != nil {
+			if errors.Is(err, apiclient.ErrSecretNotFound) {
+				fmt.Fprintf(os.Stderr,
+					"secret %q does not exist in folder %q; use 'bs3 store %s <value>' to create it\n",
+					name, folder, ref)
+				os.Exit(1)
+			}
+			l.LogError(l.Logger.Error, "error editing secret", "name", name, "folder", folder, "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("secret %q updated successfully\n", name)
+
+	case argDelete:
+		ref := getArgSafe(args, 1, fmt.Sprintf("bs3 %s <folder.name>", argDelete))
+		folder, name := parseSecretRef(ref)
+		client := configureAPIClient()
+		if err := client.DeleteSecret(name, folder); err != nil {
+			l.LogError(l.Logger.Error, "error deleting secret", "name", name, "folder", folder, "err", err)
 			os.Exit(1)
 		}
 		fmt.Printf("secret %q deleted successfully\n", name)
 
 	case argListSecret:
+		var folderFilter string
+		filtered := false
+		if len(args) > 1 {
+			folderFilter = args[1]
+			filtered = true
+		}
 		client := configureAPIClient()
 		secs, err := client.ListSecretsMeta()
 		if err != nil {
@@ -200,24 +255,87 @@ func Run(args []string) {
 			fmt.Println("no secrets found")
 			return
 		}
-		fmt.Printf("%-30s  %-24s  %s\n", "NAME", "CREATED", "UPDATED")
+		fmt.Printf("%-30s  %-20s  %-24s  %s\n", "NAME", "FOLDER", "CREATED", "UPDATED")
+		var printed int
 		for _, s := range secs {
-			fmt.Printf("%-30s  %-24s  %s\n", s.Name, s.CreatedAt, s.UpdatedAt)
+			if filtered && s.Folder != folderFilter {
+				continue
+			}
+			folder := s.Folder
+			if folder == "" {
+				folder = "(none)"
+			}
+			fmt.Printf("%-30s  %-20s  %-24s  %s\n", s.Name, folder, s.CreatedAt, s.UpdatedAt)
+			printed++
+		}
+		if printed == 0 {
+			fmt.Println("no secrets found")
 		}
 
+	case argListFolders:
+		client := configureAPIClient()
+		folders, err := client.ListFolders()
+		if err != nil {
+			l.LogError(l.Logger.Error, "error listing folders", "err", err)
+			os.Exit(1)
+		}
+		if len(folders) == 0 {
+			fmt.Println("no folders found")
+			return
+		}
+		fmt.Printf("%-30s  %s\n", "FOLDER", "SECRETS")
+		for _, f := range folders {
+			folder := f.Folder
+			if folder == "" {
+				folder = "(none)"
+			}
+			fmt.Printf("%-30s  %d\n", folder, f.SecretCount)
+		}
+
+	case argCreateFolder:
+		folder := getArgSafe(args, 1, fmt.Sprintf("bs3 %s <folder>", argCreateFolder))
+		client := configureAPIClient()
+		if err := client.CreateFolder(folder); err != nil {
+			if errors.Is(err, apiclient.ErrFolderExists) {
+				fmt.Fprintf(os.Stderr, "folder %q already exists\n", folder)
+				os.Exit(1)
+			}
+			l.LogError(l.Logger.Error, "error creating folder", "folder", folder, "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("folder %q created successfully\n", folder)
+
+	case argMoveSecret:
+		usage := fmt.Sprintf("bs3 %s <folder.name> <to_folder>", argMoveSecret)
+		ref := getArgSafe(args, 1, usage)
+		toFolder := getArgSafe(args, 2, usage)
+		fromFolder, name := parseSecretRef(ref)
+		client := configureAPIClient()
+		if err := client.MoveSecret(name, fromFolder, toFolder); err != nil {
+			if errors.Is(err, apiclient.ErrSecretExists) {
+				fmt.Fprintf(os.Stderr,
+					"a secret named %q already exists in folder %q\n", name, toFolder)
+				os.Exit(1)
+			}
+			l.LogError(l.Logger.Error, "error moving secret", "name", name, "from", fromFolder, "to", toFolder, "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("secret %q moved to folder %q\n", name, toFolder)
+
 	case argWriteEnv:
-		usage := fmt.Sprintf("bs3 %s <prefix> <secret1> [secret2...]", argWriteEnv)
+		usage := fmt.Sprintf("bs3 %s <prefix> <folder.name> [folder.name...]", argWriteEnv)
 		prefix := getArgSafe(args, 1, usage)
 		if len(args) < 3 {
 			l.LogAddInfo(l.Logger.Fatal, "incorrect usage", "usage", usage)
 		}
-		secretNames := args[2:]
+		secretRefs := args[2:]
 		client := configureAPIClient()
 		var sb strings.Builder
-		for _, name := range secretNames {
-			sec, err := client.GetSecret(name)
+		for _, ref := range secretRefs {
+			folder, name := parseSecretRef(ref)
+			sec, err := client.GetSecret(name, folder)
 			if err != nil {
-				l.LogError(l.Logger.Error, "error fetching secret", "name", name, "err", err)
+				l.LogError(l.Logger.Error, "error fetching secret", "name", name, "folder", folder, "err", err)
 				os.Exit(1)
 			}
 			sb.WriteString(fmt.Sprintf("%s=%s\n", strings.ToUpper(sec["name"]), sec["secret"]))
@@ -263,10 +381,10 @@ func Run(args []string) {
 			os.Exit(1)
 		}
 		for _, meta := range metas {
-			sec, err := client.GetSecret(meta.Name)
+			sec, err := client.GetSecret(meta.Name, meta.Folder)
 			if err != nil {
 				f.Close()
-				l.LogError(l.Logger.Error, "error fetching secret", "name", meta.Name, "err", err)
+				l.LogError(l.Logger.Error, "error fetching secret", "name", meta.Name, "folder", meta.Folder, "err", err)
 				os.Exit(1)
 			}
 			if _, err := fmt.Fprintf(f, "%s=%s\n", sec["name"], sec["secret"]); err != nil {
@@ -279,7 +397,11 @@ func Run(args []string) {
 		fmt.Printf("exported %d secret(s) to %s\n", len(metas), outPath)
 
 	case argImportSecrets:
-		inPath := getArgSafe(args, 1, fmt.Sprintf("bs3 %s <input_file>", argImportSecrets))
+		inPath := getArgSafe(args, 1, fmt.Sprintf("bs3 %s <input_file> [folder]", argImportSecrets))
+		folder := ""
+		if len(args) > 2 {
+			folder = args[2]
+		}
 		parsed, err := enveditor.ParseEnvFile(inPath)
 		if err != nil {
 			l.LogError(l.Logger.Error, "error reading env file", "path", inPath, "err", err)
@@ -290,15 +412,19 @@ func Run(args []string) {
 			return
 		}
 		client := configureAPIClient()
-		var count int
+		var count, skipped int
 		for name, value := range parsed {
-			if err := client.StoreSecret(name, value); err != nil {
-				l.LogError(l.Logger.Error, "error storing secret", "name", name, "err", err)
+			if err := client.StoreSecret(name, value, folder); err != nil {
+				if errors.Is(err, apiclient.ErrSecretExists) {
+					skipped++
+					continue
+				}
+				l.LogError(l.Logger.Error, "error storing secret", "name", name, "folder", folder, "err", err)
 				os.Exit(1)
 			}
 			count++
 		}
-		fmt.Printf("imported %d secret(s)\n", count)
+		fmt.Printf("imported %d secret(s), skipped %d existing\n", count, skipped)
 
 	// ─── Tokens ───────────────────────────────────────────────────────────────
 	case argGenerateToken:
@@ -538,7 +664,7 @@ func inject(client apiclient.Client, format format, args []string) {
 		}
 	}
 
-	secretNames := args[:cmdIdx]
+	secretRefs := args[:cmdIdx]
 
 	command := []string{}
 	if cmdIdx < len(args)-1 {
@@ -546,12 +672,13 @@ func inject(client apiclient.Client, format format, args []string) {
 	}
 
 	secretsList := make(secrets)
-	for _, name := range secretNames {
+	for _, ref := range secretRefs {
 		var key string
 
-		sec, err := client.GetSecret(name)
+		folder, name := parseSecretRef(ref)
+		sec, err := client.GetSecret(name, folder)
 		if err != nil {
-			l.LogError(l.Logger.Error, "error fetching secret", "name", name, "err", err)
+			l.LogError(l.Logger.Error, "error fetching secret", "name", name, "folder", folder, "err", err)
 			os.Exit(1)
 		}
 

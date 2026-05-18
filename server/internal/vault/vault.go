@@ -3,9 +3,12 @@ package vault
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +17,13 @@ import (
 	l "github.com/bkenks/bs3-logger"
 	"github.com/bkenks/bs3/internal/constants"
 	"github.com/bkenks/bs3/internal/cryptoutil"
+)
+
+// Sentinel errors for secret CRUD operations.
+var (
+	ErrSecretExists   = errors.New("secret already exists")
+	ErrSecretNotFound = errors.New("secret not found")
+	ErrFolderExists   = errors.New("folder already exists")
 )
 
 // --- Vault Object ---
@@ -140,9 +150,121 @@ func (v *Vault) CheckVaultState() error {
 		if err = v.connectDB(); err != nil {
 			return err
 		}
+		if err = v.migrateSchema(); err != nil {
+			return fmt.Errorf("failed to migrate vault schema | %w", err)
+		}
 		v.state = Locked
 	} else {
 		v.state = Uninitialized
+	}
+
+	return nil
+}
+
+// ~~~ migrateSchema ~~~
+// applies in-place schema migrations to an existing vault database.
+// Currently adds the secrets.folder column if it is missing.
+// Idempotent. Caller must hold v.mu write lock.
+func (v *Vault) migrateSchema() error {
+	if v.db == nil {
+		return fmt.Errorf("vault not initialized")
+	}
+
+	rows, err := v.db.Query(`PRAGMA table_info(secrets)`)
+	if err != nil {
+		return fmt.Errorf("failed to inspect secrets schema | %w", err)
+	}
+	defer rows.Close()
+
+	hasFolder := false
+	for rows.Next() {
+		var (
+			cid        int
+			name       string
+			ctype      string
+			notNull    int
+			dfltValue  sql.NullString
+			primaryKey int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &dfltValue, &primaryKey); err != nil {
+			return fmt.Errorf("failed to scan secrets schema | %w", err)
+		}
+		if name == "folder" {
+			hasFolder = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to read secrets schema | %w", err)
+	}
+
+	if !hasFolder {
+		_, err := v.db.Exec(`ALTER TABLE secrets ADD COLUMN folder TEXT NOT NULL DEFAULT ''`)
+		if err != nil {
+			return fmt.Errorf("failed to add folder column | %w", err)
+		}
+	}
+
+	// Step 2: rebuild the secrets table to drop the global UNIQUE(name)
+	// constraint in favour of a composite UNIQUE(name, folder).
+	var tableSQL string
+	if err := v.db.QueryRow(
+		`SELECT sql FROM sqlite_master WHERE type='table' AND name='secrets'`,
+	).Scan(&tableSQL); err != nil {
+		return fmt.Errorf("failed to inspect secrets table sql | %w", err)
+	}
+
+	if !strings.Contains(tableSQL, "UNIQUE(name, folder)") {
+		tx, err := v.db.Begin()
+		if err != nil {
+			return fmt.Errorf("failed to begin secrets rebuild | %w", err)
+		}
+		defer tx.Rollback()
+
+		if _, err := tx.Exec(`
+			CREATE TABLE secrets_new (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				name TEXT NOT NULL,
+				folder TEXT NOT NULL DEFAULT '',
+				encrypted_dek BLOB NOT NULL,
+				encrypted_data BLOB NOT NULL,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(name, folder)
+			)
+		`); err != nil {
+			return fmt.Errorf("failed to create secrets_new table | %w", err)
+		}
+
+		if _, err := tx.Exec(`
+			INSERT INTO secrets_new (id, name, folder, encrypted_dek, encrypted_data, created_at, updated_at)
+			SELECT id, name, folder, encrypted_dek, encrypted_data, created_at, updated_at FROM secrets
+		`); err != nil {
+			return fmt.Errorf("failed to copy secrets into secrets_new | %w", err)
+		}
+
+		if _, err := tx.Exec(`DROP TABLE secrets`); err != nil {
+			return fmt.Errorf("failed to drop old secrets table | %w", err)
+		}
+
+		if _, err := tx.Exec(`ALTER TABLE secrets_new RENAME TO secrets`); err != nil {
+			return fmt.Errorf("failed to rename secrets_new table | %w", err)
+		}
+
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit secrets rebuild | %w", err)
+		}
+	}
+
+	// Step 3: ensure the folders table exists so an empty, persistent folder
+	// can be created independently of any secret.
+	if _, err := v.db.Exec(`
+		CREATE TABLE IF NOT EXISTS folders (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT UNIQUE NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create folders table | %w", err)
 	}
 
 	return nil
@@ -239,11 +361,13 @@ func (v *Vault) InitializeVault(username, password, masterPassphrase string) err
 	_, err = v.db.Exec(`
 		CREATE TABLE IF NOT EXISTS secrets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            folder TEXT NOT NULL DEFAULT '',
             encrypted_dek BLOB NOT NULL,
             encrypted_data BLOB NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(name, folder)
         )
 	`)
 	if err != nil {
@@ -275,6 +399,18 @@ func (v *Vault) InitializeVault(username, password, masterPassphrase string) err
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create api_tokens table | %w", err)
+	}
+
+	// Create folders table
+	_, err = v.db.Exec(`
+		CREATE TABLE IF NOT EXISTS folders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create folders table | %w", err)
 	}
 
 	// Hash password
@@ -468,8 +604,42 @@ func (v *Vault) DeleteUser(username string) error {
 }
 
 // ~~~ StoreSecret ~~~
-// encrypts secret and stores in database
-func (v *Vault) StoreSecret(name string, plaintext []byte) error {
+// encrypts a secret and stores it in the database. Create-only: storing a
+// secret whose (name, folder) pair already exists returns ErrSecretExists.
+func (v *Vault) StoreSecret(name string, plaintext []byte, folder string) error {
+	v.mu.RLock()
+	masterKey := v.masterKey
+	db := v.db
+	v.mu.RUnlock()
+
+	var count int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM secrets WHERE name = ? AND folder = ?`,
+		name, folder,
+	).Scan(&count); err != nil {
+		return fmt.Errorf("failed to check for existing secret | %w", err)
+	}
+	if count > 0 {
+		return fmt.Errorf("%w: %q in folder %q", ErrSecretExists, name, folder)
+	}
+
+	env, err := cryptoutil.ProtectSecret(masterKey, plaintext)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`
+        INSERT INTO secrets (name, folder, encrypted_dek, encrypted_data)
+        VALUES (?, ?, ?, ?)
+    `, name, folder, env.EncryptedDEK, env.EncryptedData)
+
+	return err
+}
+
+// ~~~ EditSecret ~~~
+// updates the value of an existing secret identified by (name, folder).
+// Returns ErrSecretNotFound if no such secret exists.
+func (v *Vault) EditSecret(name, folder string, plaintext []byte) error {
 	v.mu.RLock()
 	masterKey := v.masterKey
 	db := v.db
@@ -480,21 +650,24 @@ func (v *Vault) StoreSecret(name string, plaintext []byte) error {
 		return err
 	}
 
-	_, err = db.Exec(`
-        INSERT INTO secrets (name, encrypted_dek, encrypted_data)
-        VALUES (?, ?, ?)
-        ON CONFLICT(name) DO UPDATE SET
-            encrypted_dek = excluded.encrypted_dek,
-            encrypted_data = excluded.encrypted_data,
-            updated_at = ?
-    `, name, env.EncryptedDEK, env.EncryptedData, time.Now())
-
-	return err
+	res, err := db.Exec(`
+        UPDATE secrets
+        SET encrypted_dek = ?, encrypted_data = ?, updated_at = ?
+        WHERE name = ? AND folder = ?
+    `, env.EncryptedDEK, env.EncryptedData, time.Now(), name, folder)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("%w: %q in folder %q", ErrSecretNotFound, name, folder)
+	}
+	return nil
 }
 
 // ~~~ GetSecret ~~~
-// retreives secret from database and decrypts
-func (v *Vault) GetSecret(name string) ([]byte, error) {
+// retreives a secret from the database (scoped to folder) and decrypts it
+func (v *Vault) GetSecret(name, folder string) ([]byte, error) {
 	v.mu.RLock()
 	masterKey := v.masterKey
 	db := v.db
@@ -503,14 +676,14 @@ func (v *Vault) GetSecret(name string) ([]byte, error) {
 	row := db.QueryRow(`
 		SELECT encrypted_dek, encrypted_data
 		FROM secrets
-		WHERE name = ?
-	`, name)
+		WHERE name = ? AND folder = ?
+	`, name, folder)
 
 	var encryptedDEK, encryptedData []byte
 	err := row.Scan(&encryptedDEK, &encryptedData)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("secret %q not found", name)
+			return nil, fmt.Errorf("%w: %q in folder %q", ErrSecretNotFound, name, folder)
 		}
 		return nil, err
 	}
@@ -529,14 +702,82 @@ func (v *Vault) GetSecret(name string) ([]byte, error) {
 }
 
 // ~~~ DeleteSecret ~~~
-// deletes secret from database
-func (v *Vault) DeleteSecret(name string) error {
+// deletes a secret (scoped to folder) from the database
+func (v *Vault) DeleteSecret(name, folder string) error {
 	v.mu.RLock()
 	db := v.db
 	v.mu.RUnlock()
 
-	_, err := db.Exec(`DELETE FROM secrets WHERE name = ?`, name)
-	return err
+	res, err := db.Exec(`DELETE FROM secrets WHERE name = ? AND folder = ?`, name, folder)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("%w: %q in folder %q", ErrSecretNotFound, name, folder)
+	}
+	return nil
+}
+
+// ~~~ MoveSecret ~~~
+// changes the folder of an existing secret from fromFolder to toFolder.
+// An empty toFolder moves the secret to the root/ungrouped folder.
+// Returns ErrSecretNotFound if the source does not exist, or ErrSecretExists
+// if a secret with the same name already occupies the destination folder.
+func (v *Vault) MoveSecret(name, fromFolder, toFolder string) error {
+	v.mu.RLock()
+	db := v.db
+	v.mu.RUnlock()
+
+	if fromFolder == toFolder {
+		// Still verify the secret exists so callers get a consistent error.
+		var count int
+		if err := db.QueryRow(
+			`SELECT COUNT(*) FROM secrets WHERE name = ? AND folder = ?`,
+			name, fromFolder,
+		).Scan(&count); err != nil {
+			return fmt.Errorf("failed to check source secret | %w", err)
+		}
+		if count == 0 {
+			return fmt.Errorf("%w: %q in folder %q", ErrSecretNotFound, name, fromFolder)
+		}
+		return nil
+	}
+
+	var srcCount int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM secrets WHERE name = ? AND folder = ?`,
+		name, fromFolder,
+	).Scan(&srcCount); err != nil {
+		return fmt.Errorf("failed to check source secret | %w", err)
+	}
+	if srcCount == 0 {
+		return fmt.Errorf("%w: %q in folder %q", ErrSecretNotFound, name, fromFolder)
+	}
+
+	var dstCount int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM secrets WHERE name = ? AND folder = ?`,
+		name, toFolder,
+	).Scan(&dstCount); err != nil {
+		return fmt.Errorf("failed to check destination secret | %w", err)
+	}
+	if dstCount > 0 {
+		return fmt.Errorf("%w: %q in folder %q", ErrSecretExists, name, toFolder)
+	}
+
+	res, err := db.Exec(
+		`UPDATE secrets SET folder = ?, updated_at = ? WHERE name = ? AND folder = ?`,
+		toFolder, time.Now(), name, fromFolder,
+	)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("%w: %q in folder %q", ErrSecretNotFound, name, fromFolder)
+	}
+	return nil
 }
 
 // ~~~ SecretInfo ~~~
@@ -544,6 +785,7 @@ func (v *Vault) DeleteSecret(name string) error {
 // does not contain secret or key
 type SecretInfo struct {
 	Name      string
+	Folder    string
 	CreatedAt string
 	UpdatedAt string
 }
@@ -697,9 +939,9 @@ func (v *Vault) ListSecrets() ([]SecretInfo, error) {
 	v.mu.RUnlock()
 
 	rows, err := db.Query(`
-		SELECT name, created_at, updated_at
+		SELECT name, folder, created_at, updated_at
 		FROM secrets
-		ORDER BY created_at ASC
+		ORDER BY folder ASC, name ASC
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retreive secrets | %w", err)
@@ -709,13 +951,107 @@ func (v *Vault) ListSecrets() ([]SecretInfo, error) {
 	var secrets []SecretInfo
 	for rows.Next() {
 		var s SecretInfo
-		if err := rows.Scan(&s.Name, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		if err := rows.Scan(&s.Name, &s.Folder, &s.CreatedAt, &s.UpdatedAt); err != nil {
 			return nil, err
 		}
 		secrets = append(secrets, s)
 	}
 
 	return secrets, nil
+}
+
+// ~~~ FolderInfo ~~~
+// represents a folder grouping and the number of secrets it contains
+type FolderInfo struct {
+	Folder      string `json:"folder"`
+	SecretCount int    `json:"secret_count"`
+}
+
+// ~~~ CreateFolder ~~~
+// inserts a new, empty folder into the folders table so it persists even
+// while it holds no secrets. Returns ErrFolderExists if the name is taken.
+func (v *Vault) CreateFolder(name string) error {
+	v.mu.RLock()
+	db := v.db
+	v.mu.RUnlock()
+
+	_, err := db.Exec(`INSERT INTO folders (name) VALUES (?)`, name)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") {
+			return fmt.Errorf("%w: %q", ErrFolderExists, name)
+		}
+		return fmt.Errorf("failed to create folder | %w", err)
+	}
+	return nil
+}
+
+// ~~~ ListFolders ~~~
+// returns the union of every distinct secrets.folder (with its secret count)
+// and every explicitly created folders.name (count 0 when empty). A folder
+// present in both sources appears once with its real secret count. Sorted by
+// folder name ascending.
+func (v *Vault) ListFolders() ([]FolderInfo, error) {
+	v.mu.RLock()
+	db := v.db
+	v.mu.RUnlock()
+
+	counts := make(map[string]int)
+
+	// Distinct secret folders with their counts.
+	secretRows, err := db.Query(`
+		SELECT folder, COUNT(*)
+		FROM secrets
+		GROUP BY folder
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retreive folders | %w", err)
+	}
+	defer secretRows.Close()
+
+	for secretRows.Next() {
+		var folder string
+		var count int
+		if err := secretRows.Scan(&folder, &count); err != nil {
+			return nil, err
+		}
+		counts[folder] = count
+	}
+	if err := secretRows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Explicitly created folders: included with count 0 when not already seen.
+	folderRows, err := db.Query(`SELECT name FROM folders`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retreive folders | %w", err)
+	}
+	defer folderRows.Close()
+
+	for folderRows.Next() {
+		var name string
+		if err := folderRows.Scan(&name); err != nil {
+			return nil, err
+		}
+		if _, ok := counts[name]; !ok {
+			counts[name] = 0
+		}
+	}
+	if err := folderRows.Err(); err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(counts))
+	for name := range counts {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	folders := make([]FolderInfo, 0, len(names))
+	for _, name := range names {
+		folders = append(folders, FolderInfo{Folder: name, SecretCount: counts[name]})
+	}
+
+	return folders, nil
 }
 
 // =====================================================

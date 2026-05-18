@@ -13,17 +13,18 @@ import (
 
 type ViewDialog struct {
 	name   string
+	folder string
 	value  string
 	client apiclient.Client
 }
 
-func NewViewDialog(name string, client apiclient.Client) *ViewDialog {
-	return &ViewDialog{name: name, client: client}
+func NewViewDialog(name, folder string, client apiclient.Client) *ViewDialog {
+	return &ViewDialog{name: name, folder: folder, client: client}
 }
 
 func (m *ViewDialog) Init() tea.Cmd {
 	return func() tea.Msg {
-		result, err := m.client.GetSecret(m.name)
+		result, err := m.client.GetSecret(m.name, m.folder)
 		if err != nil {
 			return events.APIError{Err: err}
 		}

@@ -9,6 +9,9 @@ const (
 	StateViewSecret
 	StateNewSecret
 	StateDeleteSecret
+	StateMoveSecret
+	StateEditSecret
+	StateNewFolder
 	StateViewToken
 	StateGenerateToken
 	StateTokenGenerated

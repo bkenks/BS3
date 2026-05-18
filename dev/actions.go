@@ -82,33 +82,64 @@ var allActions = []*action{
 		},
 	},
 
-	// ── Server ────────────────────────────────────────────────────────────────
+	// ── Server: local testing ─────────────────────────────────────────────────
+	// Mirrors the README "Server Deployment" section.
 
 	{
-		title:       "Server › Build Docker Image",
-		description: "Build the bs3-server Docker image for linux/amd64 + linux/arm64 using buildx",
+		title:       "Server › Local Test (Docker)",
+		description: "docker compose up --build — build the image from local source, run it on :8080",
 		makeCmd: func(repoRoot string) *exec.Cmd {
-			// The Dockerfile uses a multi-stage build that copies the logger
-			// module, so the build context must be the repo root — not server/.
-			// buildx is required for multi-platform builds; the image is stored
-			// in the buildx cache (not the local daemon) — use Tag & Push to
-			// push directly to a registry with both platforms.
-			cmd := exec.Command("docker", "buildx", "build",
-				"--platform", "linux/amd64,linux/arm64",
-				"-f", "server/Dockerfile",
-				"-t", "bs3-server",
-				".",
-			)
+			// The repo-root compose.yml has the build step; ctrl+c stops it.
+			cmd := exec.Command("docker", "compose", "up", "--build")
 			cmd.Dir = repoRoot
 			return cmd
 		},
 	},
 	{
+		title:       "Server › Stop Local Test",
+		description: "docker compose down — stop and remove the local test container",
+		run:         serverComposeDown,
+	},
+	{
+		title:       "Server › Clean Dev Environment",
+		description: "Destroy the local test container, image, volume, and network (deletes local vault data)",
+		run:         serverCleanDev,
+	},
+	{
 		title:       "Server › Run Dev Server",
-		description: "Run the API server in dev mode (go run ./cmd/ from server/)",
+		description: "Run the API server from source (go run ./cmd/ from server/)",
 		makeCmd: func(repoRoot string) *exec.Cmd {
 			return goCmd(filepath.Join(repoRoot, "server"), "run", "./cmd/")
 		},
+	},
+	{
+		title:       "Server › Build From Source",
+		description: "Compile the server binary to server/bs3-server (GOWORK=off go build ./cmd)",
+		run:         serverBuildBinary,
+	},
+
+	// ── Server: release & deploy ──────────────────────────────────────────────
+
+	{
+		title:       "Docker › Login",
+		description: "docker login — authenticate to Docker Hub before releasing",
+		makeCmd: func(repoRoot string) *exec.Cmd {
+			return exec.Command("docker", "login")
+		},
+	},
+	{
+		title:       "Server › Release Image",
+		description: "Run scripts/release.sh — build multi-platform, tag :VERSION + :latest, push to Docker Hub",
+		makeCmd: func(repoRoot string) *exec.Cmd {
+			cmd := exec.Command(filepath.Join(repoRoot, "scripts", "release.sh"))
+			cmd.Dir = repoRoot
+			return cmd
+		},
+	},
+	{
+		title:       "Server › Deploy (Production)",
+		description: "docker compose pull && up -d via server/compose/compose.yml (the published image)",
+		run:         serverDeployProd,
 	},
 
 	// ── Logger ────────────────────────────────────────────────────────────────
@@ -120,36 +151,12 @@ var allActions = []*action{
 			return goCmd(filepath.Join(repoRoot, "logger"), "run", "./cmd/")
 		},
 	},
-
-	// ── Docker Registry ───────────────────────────────────────────────────────
-
-	{
-		// makeInputCmd is used so the build+push runs interactively — the user
-		// sees live layer-push progress in the terminal.
-		title:       "Docker › Tag & Push",
-		description: "Build and push the bs3-server image (linux/amd64 + linux/arm64) to a registry",
-		inputPrompt: "Image name (e.g. ktbgroup/bs3-server:1.0):",
-		makeInputCmd: func(repoRoot string, imageName string) *exec.Cmd {
-			// buildx build --push produces a true multi-platform manifest in
-			// the registry. docker tag + docker push cannot do this because
-			// multi-platform images cannot be loaded into the local daemon.
-			cmd := exec.Command("docker", "buildx", "build",
-				"--platform", "linux/amd64,linux/arm64",
-				"-f", "server/Dockerfile",
-				"-t", imageName,
-				"--push",
-				".",
-			)
-			cmd.Dir = repoRoot
-			return cmd
-		},
-	},
 }
 
 // ─── CLI Tool Implementations ─────────────────────────────────────────────────
 
 // cliDevInstall builds the bs3 binary into cli-tool/.testing/ and copies it
-// to ~/.local/bin/bs3. Equivalent to the old cli-tool/devinstall.sh.
+// to ~/.local/bin/bs3.
 func cliDevInstall(repoRoot string) error {
 	cliDir := filepath.Join(repoRoot, "cli-tool")
 	testDir := filepath.Join(cliDir, ".testing")
@@ -180,7 +187,7 @@ func cliDevInstall(repoRoot string) error {
 }
 
 // cliCrossCompileBuild builds bs3 for linux/amd64 and linux/arm64 and zips
-// each binary into cli-tool/.builds/. Equivalent to the old cli-tool/build.sh.
+// each binary into cli-tool/.builds/.
 func cliCrossCompileBuild(repoRoot string) error {
 	platforms := [][2]string{
 		{"linux", "amd64"},
@@ -223,6 +230,60 @@ func buildAndZip(cliDir, outDir, goos, goarch string) error {
 	defer os.Remove(binPath)
 
 	return zipFile(zipPath, binPath, binName)
+}
+
+// ─── Server Implementations ───────────────────────────────────────────────────
+
+// serverComposeDown stops and removes the local test container started by
+// "Server › Local Test", using the repo-root compose.yml.
+func serverComposeDown(repoRoot string) error {
+	cmd := exec.Command("docker", "compose", "down")
+	cmd.Dir = repoRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("docker compose down: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// serverCleanDev tears down the local test stack from the repo-root compose.yml
+// completely: the container, the default network, the bs3-data volume, and the
+// image built from local source. This deletes any vault data in that volume.
+func serverCleanDev(repoRoot string) error {
+	cmd := exec.Command("docker", "compose", "down",
+		"--volumes", "--rmi", "local", "--remove-orphans")
+	cmd.Dir = repoRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("docker compose down: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// serverBuildBinary compiles the server into server/bs3-server. GOWORK=off is
+// set by goCmd so the build uses server/go.mod, not the repo-root workspace.
+func serverBuildBinary(repoRoot string) error {
+	cmd := goCmd(filepath.Join(repoRoot, "server"), "build", "-o", "bs3-server", "./cmd")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("go build: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// serverDeployProd pulls the published image and starts it detached, using
+// server/compose/compose.yml — the production deployment step. Run it on the
+// host that should serve the vault.
+func serverDeployProd(repoRoot string) error {
+	composeFile := filepath.Join("server", "compose", "compose.yml")
+	for _, args := range [][]string{
+		{"compose", "-f", composeFile, "pull"},
+		{"compose", "-f", composeFile, "up", "-d"},
+	} {
+		cmd := exec.Command("docker", args...)
+		cmd.Dir = repoRoot
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("docker %s: %s", strings.Join(args, " "), strings.TrimSpace(string(out)))
+		}
+	}
+	return nil
 }
 
 // ─── Shared Utilities ─────────────────────────────────────────────────────────

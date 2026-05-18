@@ -12,7 +12,10 @@ type SetState struct{ State shared.SessionState }
 
 func (SetState) isEvent() {}
 
-type SecretsRefreshed struct{ Secrets []apiclient.SecretMeta }
+type SecretsRefreshed struct {
+	Secrets []apiclient.SecretMeta
+	Folders []apiclient.FolderMeta
+}
 
 func (SecretsRefreshed) isEvent() {}
 
@@ -27,6 +30,18 @@ func (SecretStored) isEvent() {}
 type SecretDeleted struct{}
 
 func (SecretDeleted) isEvent() {}
+
+type SecretMoved struct{}
+
+func (SecretMoved) isEvent() {}
+
+type SecretEdited struct{}
+
+func (SecretEdited) isEvent() {}
+
+type FolderCreated struct{}
+
+func (FolderCreated) isEvent() {}
 
 type TokensRefreshed struct{ Tokens []apiclient.TokenMeta }
 

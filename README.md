@@ -33,10 +33,11 @@
   - [Authentication](#authentication)
 - [API Reference](#api-reference)
   - [Example Workflow](#example-workflow)
-- [Installation](#installation)
-  - [Docker Compose (Recommended)](#docker-compose-recommended)
-  - [Build from Source (Server)](#build-from-source-server)
-  - [Build Docker Image](#build-docker-image)
+- [Server Deployment](#server-deployment)
+  - [Local Testing (Docker)](#local-testing-docker)
+  - [Releasing a Production Image](#releasing-a-production-image)
+  - [Production Deployment](#production-deployment)
+  - [Build From Source](#build-from-source)
 - [Configuration](#configuration)
 - [CLI Tool](#cli-tool)
   - [Install the CLI](#install-the-cli)
@@ -44,6 +45,7 @@
   - [TUI](#tui)
   - [Vault Lifecycle](#vault-lifecycle-1)
   - [Secrets](#secrets)
+    - [Organize secrets into folders](#organize-secrets-into-folders)
     - [Inject secrets into a process](#inject-secrets-into-a-process)
     - [Write secrets to a tmpfs env file](#write-secrets-to-a-tmpfs-env-file)
   - [Tokens](#tokens)
@@ -59,7 +61,7 @@
 
 **BS3** is a lightweight, self-hosted secret management server and CLI built for homelab environments. It exposes a REST API backed by a SQLite database and uses the same **envelope encryption** strategy employed by tools like HashiCorp Vault and AWS Secrets Manager — but without the complexity or cost.
 
-Secrets are encrypted at rest with AES-256-GCM. The master key never touches disk. Authentication supports both HTTP Basic Auth and HMAC-signed Bearer tokens with optional TTL expiration.
+Secrets are encrypted at rest with AES-256-GCM. The master key never touches disk. Authentication supports both HTTP Basic Auth and HMAC-signed Bearer tokens with optional TTL expiration. Secrets can be organized into optional, free-text **folders** for grouping.
 
 > **Intended for homelab use.** If you're currently shoving secrets into `.env` files, this is for you.
 
@@ -115,10 +117,14 @@ All API routes are protected by `authMiddleware`, which supports two methods:
 | `GET`    | `/token?name=X&ttl=N`    | Basic Auth      | Generate a named Bearer token (TTL in seconds, optional)        |
 | `DELETE` | `/deletetoken?name=X`    | Bearer or Basic | Delete a named token                                            |
 | `GET`    | `/listtokens`            | Bearer or Basic | List all tokens                                                 |
-| `POST`   | `/store`                 | Bearer or Basic | Store a named secret                                            |
-| `GET`    | `/get?name=X`            | Bearer or Basic | Retrieve a secret by name                                       |
-| `DELETE` | `/delete?name=X`         | Bearer or Basic | Delete a secret by name                                         |
-| `GET`    | `/listsecrets`           | Bearer or Basic | List all secret names with timestamps                           |
+| `POST`   | `/store`                 | Bearer or Basic | Create a secret in a folder (409 if that name already exists there) |
+| `POST`   | `/editsecret`            | Bearer or Basic | Update an existing secret's value (404 if it doesn't exist)     |
+| `GET`    | `/get?name=X&folder=Y`   | Bearer or Basic | Retrieve a secret by name within a folder                       |
+| `DELETE` | `/delete?name=X&folder=Y`| Bearer or Basic | Delete a secret by name within a folder                         |
+| `GET`    | `/listsecrets`           | Bearer or Basic | List all secret names with timestamps and folders              |
+| `GET`    | `/listfolders`           | Bearer or Basic | List all folders with a count of secrets in each               |
+| `POST`   | `/createfolder`          | Bearer or Basic | Create an empty folder (409 if it already exists)              |
+| `POST`   | `/movesecret`            | Bearer or Basic | Move a secret between folders (409 if the destination is taken) |
 | `POST`   | `/adduser`               | Bearer or Basic | Add a user                                                      |
 | `DELETE` | `/deleteuser?username=X` | Bearer or Basic | Delete a user                                                   |
 | `GET`    | `/listusers`             | Bearer or Basic | List all users                                                  |
@@ -140,31 +146,76 @@ curl -X POST http://localhost:8080/openvault \
   -H "Content-Type: application/json" \
   -d '{"master_passphrase":"mysuperpassphrase"}'
 
-# 4. Store a secret
+# 4. Create a secret in a folder (fails with 409 if it already exists there)
 curl -X POST http://localhost:8080/store \
   -u admin:mypassword \
   -H "Content-Type: application/json" \
-  -d '{"name":"db_password","secret":"hunter2"}'
+  -d '{"name":"db_password","secret":"hunter2","folder":"production"}'
 
-# 5. Retrieve a secret
-curl http://localhost:8080/get?name=db_password \
+# 5. Retrieve a secret (name + folder)
+curl "http://localhost:8080/get?name=db_password&folder=production" \
   -u admin:mypassword
 
-# 6. Generate a Bearer token (1 hour TTL)
+# 5b. Update an existing secret's value
+curl -X POST http://localhost:8080/editsecret \
+  -u admin:mypassword \
+  -H "Content-Type: application/json" \
+  -d '{"name":"db_password","folder":"production","secret":"hunter3"}'
+
+# 6. List folders with secret counts
+curl http://localhost:8080/listfolders \
+  -u admin:mypassword
+
+# 7. Generate a Bearer token (1 hour TTL)
 curl "http://localhost:8080/token?name=ci_token&ttl=3600" \
   -u admin:mypassword
 ```
 
 ---
 
-## Installation
+## Server Deployment
 
-### Docker Compose (Recommended)
+The server ships as a Docker image. Releasing and deploying are separate steps:
+`scripts/release.sh` **publishes** an image to Docker Hub, and your production
+Compose file **consumes** it.
+
+### Local Testing (Docker)
+
+The repo-root `compose.yml` builds the image straight from your working tree —
+uncommitted changes included — so you can test before publishing:
+
+```bash
+docker compose up --build      # build local source, run on :8080
+docker compose down            # stop and remove the container
+```
+
+### Releasing a Production Image
+
+Edit the variables at the top of `scripts/release.sh` (`DOCKER_USER`,
+`IMAGE_NAME`, `VERSION`, `PLATFORMS`), then run it. It builds the image for **multiple
+architectures** (`linux/amd64` + `linux/arm64` by default) via `buildx`, tags it
+`:VERSION` and `:latest`, and pushes both to Docker Hub:
+
+```bash
+docker login        # once
+./scripts/release.sh
+```
+
+Multi-platform matters: building on an ARM Mac with a plain `docker build`
+produces an ARM-only image that won't run on an `amd64` Linux server — `buildx`
+with `--platform` builds for both. The `:VERSION` tag keeps a runnable history;
+`:latest` always points at the newest push. The image uses a multi-stage build
+— only the compiled binary ends up in the final Alpine-based image (~10 MB).
+
+### Production Deployment
+
+On the server host, deploy with a Compose file that **pulls** the published
+image:
 
 ```yaml
 services:
   bs3-server:
-    image: bs3-server:latest
+    image: bkenks/bs3-server:latest
     ports:
       - "8080:8080"
     volumes:
@@ -175,26 +226,29 @@ volumes:
   bs3-data:
 ```
 
-The `/data` volume persists your encrypted database (`vault.db`) and salt file (`vault_salt`). Mount it to keep your vault across container restarts.
+```bash
+docker compose pull && docker compose up -d
+```
 
-### Build from Source (Server)
+The `/data` volume persists the encrypted database (`vault.db`) and salt file
+(`vault_salt`) across restarts. TLS is not built in — put BS3 behind a reverse
+proxy (Caddy, Nginx) for HTTPS.
+
+### Build From Source
+
+To run the server without Docker:
 
 ```bash
 git clone https://github.com/bkenks/BS3.git
 cd BS3/server
-
-go build -o bs3-server ./cmd
-./bs3-server
-./bs3-server --verbose   # enable debug logging
+GOWORK=off go build -o bs3-server ./cmd
+./bs3-server              # or: ./bs3-server --verbose
 ```
 
-### Build Docker Image
-
-```bash
-docker build -t bs3-server .
-```
-
-The image uses a multi-stage build — only the compiled binary ends up in the final Alpine-based image (~10 MB).
+`GOWORK=off` is required — the repo's root `go.work` only includes `./dev`. The
+server writes its vault to the hardcoded `/data` directory, so that path must
+exist and be writable; Docker (where `/data` is a mounted volume) is the
+recommended path.
 
 ---
 
@@ -213,16 +267,25 @@ BS3 ships with a companion CLI for interacting with the server. It supports both
 
 ### Install the CLI
 
-Requires Go and git. Builds from source and installs to `~/.local/bin/bs3`:
+**Production install** — requires Go and git; builds from `main` and installs to `~/.local/bin/bs3`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bkenks/BS3/main/cli-tool/scripts/install.sh | sh
 ```
 
+There is no separate CLI "release" step — the install script always builds the current `main`, so shipping a CLI change just means merging it to `main`.
+
 If `~/.local/bin` isn't on your `$PATH`, add this to your shell config (`~/.bashrc`, `~/.zshrc`, etc.):
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
+```
+
+**Local testing** — build from a checkout (`GOWORK=off` is required; the root `go.work` excludes `cli-tool/`):
+
+```bash
+cd BS3/cli-tool
+GOWORK=off go build -o bs3 .      # or run directly: GOWORK=off go run . <args>
 ```
 
 ### Uninstall the CLI
@@ -261,6 +324,13 @@ bs3 set password mypassword
 bs3 tui    # Launch the interactive terminal UI
 ```
 
+The secrets browser works like a file explorer: the top level lists folders
+and ungrouped secrets; `enter` opens a folder to see the secrets inside it, and
+`esc` walks back up (and out to the main menu from the root). New secrets
+default to whichever folder is currently open. Keys: `enter` open · `esc` back ·
+`ctrl+n` new secret · `ctrl+d` new folder · `ctrl+e` edit · `ctrl+f` move ·
+`ctrl+\` delete · `/` filter.
+
 ### Vault Lifecycle
 
 ```bash
@@ -275,22 +345,52 @@ bs3 openvault <master_passphrase>
 
 ### Secrets
 
+Secrets are addressed as `folder.name` — the text before the first `.` is the
+folder, the rest is the secret name. A name with no `.` refers to the
+ungrouped/root folder.
+
 ```bash
-bs3 store <name> <value>          # Store a secret
-bs3 get <name>                    # Print a secret value to stdout
-bs3 delete <name>                 # Delete a secret
-bs3 listsecrets                   # List all secrets with timestamps
+bs3 store <folder.name> <value>     # Create a secret (fails if it already exists)
+bs3 edit <folder.name> <value>      # Update an existing secret's value
+bs3 get <folder.name>               # Print a secret value to stdout
+bs3 delete <folder.name>            # Delete a secret
+bs3 listsecrets [folder]            # List secrets (with timestamps and a
+                                    # FOLDER column); optionally filter to one folder
+
+# Examples
+bs3 store supabase.jwt_key eyJhb...   # secret "jwt_key" in folder "supabase"
+bs3 store api_key abc123              # secret "api_key" in the root folder
+```
+
+#### Organize secrets into folders
+
+A folder is a free-text tag that groups secrets. The unique key is the
+`(name, folder)` pair, so **the same name may exist in different folders** —
+`prod.db_password` and `staging.db_password` are two distinct secrets. A secret
+with no folder is ungrouped. `store` only ever creates: if a secret with that
+name already exists in that folder it fails — use `edit` to change a value.
+
+A folder appears automatically as soon as a secret is tagged with it, but you
+can also create an **empty** folder ahead of time with `createfolder` — an
+explicitly created folder persists even with zero secrets in it.
+
+```bash
+bs3 listfolders                      # List folders and how many secrets each contains
+bs3 createfolder <folder>            # Create an empty folder
+bs3 movesecret <folder.name> <to_folder>  # Move a secret to another folder
+                                           # (empty to_folder moves it to ungrouped/root;
+                                           #  fails if the name is taken in to_folder)
 ```
 
 #### Inject secrets into a process
 
-`envject` fetches secrets from the vault and injects them as environment variables into the given command. Secret names are uppercased as env var keys.
+`envject` fetches secrets from the vault and injects them as environment variables into the given command. The secret name (after the folder) is uppercased as the env var key.
 
 ```bash
-bs3 envject <secret1> [secret2...] -- <command> [args...]
+bs3 envject <folder.name> [folder.name...] -- <command> [args...]
 
 # Example: run a Node app with DB_PASSWORD and API_KEY injected
-bs3 envject db_password api_key -- node server.js
+bs3 envject production.db_password production.api_key -- node server.js
 ```
 
 #### Write secrets to a tmpfs env file
@@ -298,14 +398,20 @@ bs3 envject db_password api_key -- node server.js
 `writeenv` fetches secrets and writes them as `KEY=VALUE` pairs to `/dev/shm/bs3-<prefix>.env` (tmpfs, mode `0600`). Useful for passing secrets to tools that expect a `.env` file without touching disk.
 
 ```bash
-bs3 writeenv <prefix> <secret1> [secret2...]
+bs3 writeenv <prefix> <folder.name> [folder.name...]
 # Writes to /dev/shm/bs3-<prefix>.env and prints the path
 
 bs3 rmenv <prefix>
 # Deletes /dev/shm/bs3-<prefix>.env
 
+bs3 importenv <input_file> [folder]
+# Imports KEY=VALUE pairs from a .env file as secrets.
+# The optional [folder] argument imports them all into that folder.
+# Secrets that already exist in the target folder are skipped (not overwritten);
+# the command reports how many were imported and how many skipped.
+
 # Example
-bs3 writeenv myapp db_password api_key
+bs3 writeenv myapp production.db_password production.api_key
 # → /dev/shm/bs3-myapp.env
 # DB_PASSWORD=hunter2
 # API_KEY=abc123

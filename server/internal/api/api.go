@@ -3,12 +3,14 @@ package api
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	l "github.com/bkenks/bs3-logger"
 	"github.com/bkenks/bs3/internal/cryptoutil"
@@ -28,9 +30,13 @@ type Server struct {
 
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/store", s.authMiddleware(s.StoreSecret))
+	mux.HandleFunc("/editsecret", s.authMiddleware(s.EditSecret))
 	mux.HandleFunc("/get", s.authMiddleware(s.GetSecret))
 	mux.HandleFunc("/delete", s.authMiddleware(s.DeleteSecret))
 	mux.HandleFunc("/listsecrets", s.authMiddleware(s.ListSecrets))
+	mux.HandleFunc("/listfolders", s.authMiddleware(s.ListFolders))
+	mux.HandleFunc("/createfolder", s.authMiddleware(s.CreateFolder))
+	mux.HandleFunc("/movesecret", s.authMiddleware(s.MoveSecret))
 	mux.HandleFunc("/token", s.authMiddleware(s.GenerateToken))
 	mux.HandleFunc("/deletetoken", s.authMiddleware(s.DeleteToken))
 	mux.HandleFunc("/listtokens", s.authMiddleware(s.ListTokens))
@@ -518,6 +524,7 @@ func (s *Server) StoreSecret(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name   string `json:"name"`
 		Secret string `json:"secret"`
+		Folder string `json:"folder"`
 	}
 
 	body, err := io.ReadAll(r.Body)
@@ -543,10 +550,20 @@ func (s *Server) StoreSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Vault.StoreSecret(req.Name, []byte(req.Secret)); err != nil {
+	folder, err := sanitizeFolder(req.Folder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid folder", err.Error(), err)
+		return
+	}
+
+	if err := s.Vault.StoreSecret(req.Name, []byte(req.Secret), folder); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, vault.ErrSecretExists) {
+			status = http.StatusConflict
+		}
 		writeError(
 			w,
-			http.StatusInternalServerError,
+			status,
 			"could not store secret",
 			"failed to store secret",
 			err,
@@ -557,10 +574,60 @@ func (s *Server) StoreSecret(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
+func (s *Server) EditSecret(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "attempted to call non-POST method on /editsecret", nil)
+		return
+	}
+
+	var req struct {
+		Name   string `json:"name"`
+		Folder string `json:"folder"`
+		Secret string `json:"secret"`
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON", "failed to read json body", err)
+		return
+	}
+	defer r.Body.Close()
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON", "invalid JSON provided", err)
+		return
+	}
+
+	folder, err := sanitizeFolder(req.Folder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid folder", err.Error(), err)
+		return
+	}
+
+	if err := s.Vault.EditSecret(req.Name, folder, []byte(req.Secret)); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, vault.ErrSecretNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(
+			w,
+			status,
+			"could not edit secret",
+			"failed to edit secret",
+			err,
+		)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message":"secret updated successfully"}`))
+}
+
 func (s *Server) GetSecret(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
+	folder := r.URL.Query().Get("folder")
 
-	secret, err := s.Vault.GetSecret(name)
+	secret, err := s.Vault.GetSecret(name, folder)
 	if err != nil {
 		writeError(
 			w,
@@ -574,6 +641,7 @@ func (s *Server) GetSecret(w http.ResponseWriter, r *http.Request) {
 
 	resp := map[string]string{
 		"name":   name,
+		"folder": folder,
 		"secret": string(secret),
 	}
 	json.NewEncoder(w).Encode(resp)
@@ -581,10 +649,15 @@ func (s *Server) GetSecret(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) DeleteSecret(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
-	if err := s.Vault.DeleteSecret(name); err != nil {
+	folder := r.URL.Query().Get("folder")
+	if err := s.Vault.DeleteSecret(name, folder); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, vault.ErrSecretNotFound) {
+			status = http.StatusNotFound
+		}
 		writeError(
 			w,
-			http.StatusInternalServerError,
+			status,
 			"could not delete secret",
 			"failed to delete secret",
 			err,
@@ -610,6 +683,138 @@ func (s *Server) ListSecrets(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(secrets)
+}
+
+func (s *Server) ListFolders(w http.ResponseWriter, r *http.Request) {
+	folders, err := s.Vault.ListFolders()
+	if err != nil {
+		writeError(
+			w,
+			http.StatusInternalServerError,
+			"could not list folders",
+			"failed to list folders",
+			err,
+		)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(folders)
+}
+
+func (s *Server) CreateFolder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "attempted to call non-POST method on /createfolder", nil)
+		return
+	}
+
+	var req struct {
+		Folder string `json:"folder"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON", "invalid JSON provided", err)
+		return
+	}
+	defer r.Body.Close()
+
+	folder, err := sanitizeFolder(req.Folder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid folder", err.Error(), err)
+		return
+	}
+	if folder == "" {
+		writeError(w, http.StatusBadRequest, "missing required field", "folder name required", nil)
+		return
+	}
+
+	if err := s.Vault.CreateFolder(folder); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, vault.ErrFolderExists) {
+			status = http.StatusConflict
+		}
+		writeError(
+			w,
+			status,
+			"could not create folder",
+			"failed to create folder",
+			err,
+		)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte(`{"message":"folder created"}`))
+}
+
+func (s *Server) MoveSecret(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "attempted to call non-POST method on /movesecret", nil)
+		return
+	}
+
+	var req struct {
+		Name       string `json:"name"`
+		FromFolder string `json:"from_folder"`
+		ToFolder   string `json:"to_folder"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON", "invalid JSON provided", err)
+		return
+	}
+	defer r.Body.Close()
+
+	if len(req.Name) == 0 {
+		writeError(w, http.StatusBadRequest, "missing required field", "name required", nil)
+		return
+	}
+
+	fromFolder, err := sanitizeFolder(req.FromFolder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid folder", err.Error(), err)
+		return
+	}
+	toFolder, err := sanitizeFolder(req.ToFolder)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid folder", err.Error(), err)
+		return
+	}
+
+	if err := s.Vault.MoveSecret(req.Name, fromFolder, toFolder); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, vault.ErrSecretNotFound) {
+			status = http.StatusNotFound
+		} else if errors.Is(err, vault.ErrSecretExists) {
+			status = http.StatusConflict
+		}
+		writeError(
+			w,
+			status,
+			"could not move secret",
+			"failed to move secret",
+			err,
+		)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message":"secret moved successfully"}`))
+}
+
+// ~~~ sanitizeFolder ~~~
+// trims and validates a folder name. An empty string is valid (root).
+func sanitizeFolder(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	for _, r := range s {
+		if unicode.IsControl(r) {
+			return "", fmt.Errorf("folder contains invalid characters")
+		}
+	}
+	if len(s) > 128 {
+		return "", fmt.Errorf("folder name too long (max 128)")
+	}
+	return s, nil
 }
 
 // =====================================================

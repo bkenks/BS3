@@ -1,6 +1,7 @@
 package secrets
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -19,7 +20,7 @@ type CreateDialog struct {
 	client    apiclient.Client
 }
 
-func NewCreateDialog(client apiclient.Client) *CreateDialog {
+func NewCreateDialog(client apiclient.Client, defaultFolder string) *CreateDialog {
 	name := textinput.New()
 	name.Placeholder = "name"
 	name.CharLimit = 128
@@ -30,7 +31,12 @@ func NewCreateDialog(client apiclient.Client) *CreateDialog {
 	val.EchoCharacter = '•'
 	val.CharLimit = 512
 
-	return &CreateDialog{inputs: []textinput.Model{name, val}, client: client}
+	folder := textinput.New()
+	folder.Placeholder = "folder (optional)"
+	folder.CharLimit = 128
+	folder.SetValue(defaultFolder)
+
+	return &CreateDialog{inputs: []textinput.Model{name, val, folder}, client: client}
 }
 
 func (m *CreateDialog) Init() tea.Cmd { return m.inputs[0].Focus() }
@@ -59,12 +65,12 @@ func (m *CreateDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.focusIdx++
 			return m, m.cycleFocus()
 		}
-		name, value := m.inputs[0].Value(), m.inputs[1].Value()
+		name, value, folder := m.inputs[0].Value(), m.inputs[1].Value(), m.inputs[2].Value()
 		if name == "" || value == "" {
 			m.statusMsg = "name and value are required"
 			return m, nil
 		}
-		return m, m.storeCmd(name, value)
+		return m, m.storeCmd(name, value, folder)
 	default:
 		var cmd tea.Cmd
 		m.inputs[m.focusIdx], cmd = m.inputs[m.focusIdx].Update(msg)
@@ -84,9 +90,17 @@ func (m *CreateDialog) cycleFocus() tea.Cmd {
 	return blinkCmd
 }
 
-func (m *CreateDialog) storeCmd(name, value string) tea.Cmd {
+func (m *CreateDialog) storeCmd(name, value, folder string) tea.Cmd {
 	return func() tea.Msg {
-		if err := m.client.StoreSecret(name, value); err != nil {
+		if err := m.client.StoreSecret(name, value, folder); err != nil {
+			if errors.Is(err, apiclient.ErrSecretExists) {
+				display := folder
+				if display == "" {
+					display = "(ungrouped)"
+				}
+				return events.APIError{Err: fmt.Errorf(
+					"secret %q already exists in folder %q; use edit instead", name, display)}
+			}
 			return events.APIError{Err: err}
 		}
 		return events.SecretStored{}
@@ -94,7 +108,8 @@ func (m *CreateDialog) storeCmd(name, value string) tea.Cmd {
 }
 
 func (m *CreateDialog) View() string {
-	body := fmt.Sprintf("Name\n%s\n\nValue\n%s", m.inputs[0].View(), m.inputs[1].View())
+	body := fmt.Sprintf("Name\n%s\n\nValue\n%s\n\nFolder\n%s",
+		m.inputs[0].View(), m.inputs[1].View(), m.inputs[2].View())
 	if m.statusMsg != "" {
 		body += "\n\n" + m.statusMsg
 	}
