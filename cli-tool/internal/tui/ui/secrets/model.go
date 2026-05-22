@@ -7,10 +7,10 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/bkenks/bs3/internal/apiclient"
-	"github.com/bkenks/bs3/internal/constants"
-	"github.com/bkenks/bs3/internal/tui/ui/events"
-	"github.com/bkenks/bs3/internal/tui/ui/shared"
+	"github.com/bkenks/bs3-cli/internal/apiclient"
+	"github.com/bkenks/bs3-cli/internal/constants"
+	"github.com/bkenks/bs3-cli/internal/tui/ui/events"
+	"github.com/bkenks/bs3-cli/internal/tui/ui/shared"
 )
 
 // Model is the secrets browser. It works like a file explorer: the root level

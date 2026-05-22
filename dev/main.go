@@ -1,6 +1,6 @@
 // Package main is the BS3 developer hub — a Bubble Tea TUI that provides a
 // central menu for common development tasks: building, running, testing, and
-// publishing the three BS3 modules (server, cli-tool, logger).
+// publishing the server, cli-tool, and logger modules.
 //
 // Run from the repository root:
 //

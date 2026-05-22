@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/bs3_Dark_BG-w_Full_Title.svg">
-    <source media="(prefers-color-scheme: light)" srcset="assets/bs3_Light_BG-w_Full_Title.svg">
-    <img src="assets/bs3-_Light_BG-w_Full_Title.svg" alt="BS3 Logo" width="600"/>
+    <source media="(prefers-color-scheme: dark)" srcset=".github_assets/bs3_Dark_BG-w_Full_Title.svg">
+    <source media="(prefers-color-scheme: light)" srcset=".github_assets/bs3_Light_BG-w_Full_Title.svg">
+    <img src=".github_assets/bs3_Light_BG-w_Full_Title.svg" alt="BS3 Logo" width="600"/>
   </picture>
 </p>
 
@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/Dual_Demo_with_Drop.png" alt="BS3 in action" width="800"/>
+  <img src=".github_assets/Dual_Demo_with_Drop.png" alt="BS3 in action" width="800"/>
 </p>
 
 <p align="center">
@@ -176,17 +176,17 @@ curl "http://localhost:8080/token?name=ci_token&ttl=3600" \
 ## Server Deployment
 
 The server ships as a Docker image. Releasing and deploying are separate steps:
-`scripts/release.sh` **publishes** an image to Docker Hub, and your production
-Compose file **consumes** it.
+`dev/scripts/release.sh` **publishes** an image to Docker Hub, and your
+production Compose file **consumes** it.
 
 ### Local Testing (Docker)
 
-The repo-root `compose.yml` builds the image straight from your working tree —
-uncommitted changes included — so you can test before publishing:
+`server/compose/compose.dev.yml` builds the image straight from your working
+tree — uncommitted changes included — so you can test before publishing:
 
 ```bash
-docker compose up --build      # build local source, run on :8080
-docker compose down            # stop and remove the container
+docker compose -f server/compose/compose.dev.yml up --build   # build local source, run on :8080
+docker compose -f server/compose/compose.dev.yml down         # stop and remove the container
 ```
 
 ### Releasing a Production Image
@@ -194,13 +194,13 @@ docker compose down            # stop and remove the container
 The server and CLI version **independently** — releases are tagged
 `server/vX.Y.Z` and `cli/vX.Y.Z` so each ships on its own schedule.
 
-`scripts/release.sh` cuts a server release. Pass the version (and `--prerelease`
-for a pre-release):
+`dev/scripts/release.sh` cuts a server release. Pass the version (and
+`--prerelease` for a pre-release):
 
 ```bash
 docker login        # once
-./scripts/release.sh 1.2.3                # stable release
-./scripts/release.sh 1.3.0-rc --prerelease   # pre-release
+./dev/scripts/release.sh 1.2.3                # stable release
+./dev/scripts/release.sh 1.3.0-rc --prerelease   # pre-release
 ```
 
 It builds the image for **multiple architectures** (`linux/amd64` +
@@ -254,10 +254,11 @@ GOWORK=off go build -o bs3-server ./cmd
 ./bs3-server              # or: ./bs3-server --verbose
 ```
 
-`GOWORK=off` is required — the repo's root `go.work` only includes `./dev`. The
-server writes its vault to the hardcoded `/data` directory, so that path must
-exist and be writable; Docker (where `/data` is a mounted volume) is the
-recommended path.
+`GOWORK=off` builds the `server` module in isolation against its own
+`go.mod`/`go.sum`, independent of the repo's `go.work` workspace (the same way
+the release and Docker builds resolve dependencies). The server writes its vault
+to the hardcoded `/data` directory, so that path must exist and be writable;
+Docker (where `/data` is a mounted volume) is the recommended path.
 
 ---
 
@@ -294,7 +295,7 @@ If `~/.local/bin` isn't on your `$PATH`, add this to your shell config (`~/.bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-**Local testing** — build from a checkout (`GOWORK=off` is required; the root `go.work` excludes `cli-tool/`):
+**Local testing** — build from a checkout (`GOWORK=off` builds `cli-tool` in isolation against its own `go.mod`, independent of the repo's `go.work` workspace):
 
 ```bash
 cd BS3/cli-tool
@@ -303,11 +304,11 @@ GOWORK=off go build -o bs3 .      # or run directly: GOWORK=off go run . <args>
 
 ### Releasing the CLI
 
-`scripts/release-cli.sh` cuts a CLI release — independent of the server:
+`dev/scripts/release-cli.sh` cuts a CLI release — independent of the server:
 
 ```bash
-./scripts/release-cli.sh 0.4.0                # stable: tags cli/v0.4.0 + advances cli/stable
-./scripts/release-cli.sh 0.5.0-rc --prerelease   # pre-release: tag + GitHub release only
+./dev/scripts/release-cli.sh 0.4.0                # stable: tags cli/v0.4.0 + advances cli/stable
+./dev/scripts/release-cli.sh 0.5.0-rc --prerelease   # pre-release: tag + GitHub release only
 ```
 
 It creates a GitHub release `cli/v0.4.0`; a stable release also force-moves the `cli/stable` tag so `install.sh` picks it up. Requires an authenticated `gh`.

@@ -15,8 +15,8 @@ import (
 	_ "modernc.org/sqlite"
 
 	l "github.com/bkenks/bs3-logger"
-	"github.com/bkenks/bs3/internal/constants"
-	"github.com/bkenks/bs3/internal/cryptoutil"
+	"github.com/bkenks/bs3-server/internal/constants"
+	"github.com/bkenks/bs3-server/internal/cryptoutil"
 )
 
 // Sentinel errors for secret CRUD operations.

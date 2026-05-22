@@ -1,4 +1,4 @@
-module github.com/bkenks/bs3
+module github.com/bkenks/bs3-cli
 
 go 1.25.7
 

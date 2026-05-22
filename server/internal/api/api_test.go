@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bkenks/bs3/internal/constants"
-	"github.com/bkenks/bs3/internal/vault"
+	"github.com/bkenks/bs3-server/internal/constants"
+	"github.com/bkenks/bs3-server/internal/vault"
 )
 
 // newTestServer spins up the full API handler stack backed by a freshly

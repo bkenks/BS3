@@ -7,8 +7,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/bkenks/bs3/internal/tui/ui/events"
-	"github.com/bkenks/bs3/internal/tui/ui/shared"
+	"github.com/bkenks/bs3-cli/internal/tui/ui/events"
+	"github.com/bkenks/bs3-cli/internal/tui/ui/shared"
 )
 
 type ViewDialog struct {

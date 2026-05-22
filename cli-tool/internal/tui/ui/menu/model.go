@@ -4,8 +4,8 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/bkenks/bs3/internal/tui/ui/events"
-	"github.com/bkenks/bs3/internal/tui/ui/shared"
+	"github.com/bkenks/bs3-cli/internal/tui/ui/events"
+	"github.com/bkenks/bs3-cli/internal/tui/ui/shared"
 )
 
 type menuEntry struct {

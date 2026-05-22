@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bkenks/bs3/internal/constants"
+	"github.com/bkenks/bs3-server/internal/constants"
 	"golang.org/x/crypto/argon2"
 )
 

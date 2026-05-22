@@ -3,7 +3,7 @@
 # (cli/vX.Y.Z) and, for stable releases, move the cli/stable pointer tag.
 #
 # Run `gh auth login` once first, then:
-#   ./scripts/release-cli.sh <version> [--prerelease]
+#   ./dev/scripts/release-cli.sh <version> [--prerelease]
 #
 # <version>      bare semver X.Y.Z (no leading v, no prefix)
 # --prerelease   optional; marks the GitHub release as a prerelease and
@@ -39,8 +39,8 @@ if [ -n "$PRERELEASE_ARG" ]; then
   fi
 fi
 
-# This script lives in scripts/, so the repo root is one level up.
-cd "$(dirname "$0")/.."
+# This script lives in dev/scripts/, so the repo root is two levels up.
+cd "$(dirname "$0")/../.."
 
 # Warn (but continue) if the working tree is dirty — the release will be cut
 # from the current HEAD commit, not from the uncommitted changes.

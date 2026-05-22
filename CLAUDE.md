@@ -8,11 +8,20 @@ BS3 is a self-hosted secrets vault for homelab environments — a lightweight al
 
 ## Repository Structure
 
-Three separate Go modules — build and test each independently:
+A multi-module monorepo (one git repo, four Go modules) tied together by a
+root `go.work`. Each module has its own distinct module path and can be built
+and released independently:
 
-- **`server/`** — The vault HTTP API server
-- **`cli-tool/`** — CLI and TUI for interacting with the server
-- **`logger/`** — Shared logging module (imported by the other two)
+- **`server/`** (`github.com/bkenks/bs3-server`) — The vault HTTP API server
+- **`cli-tool/`** (`github.com/bkenks/bs3-cli`) — CLI and TUI for interacting with the server
+- **`logger/`** (`github.com/bkenks/bs3-logger`) — Shared logging module (imported by server + cli via a `replace … => ../logger` directive)
+- **`dev/`** (`github.com/bkenks/bs3dev`) — The `bs3dev` developer hub: a Bubble Tea TUI (`go run ./dev/`) that wraps build/run/test/release tasks for the other modules
+
+`go.work` lists all four modules so the editor/gopls resolves the whole repo.
+Release, install, and Docker builds run with `GOWORK=off` so each module builds
+in isolation against its own `go.mod`/`go.sum` (reproducible, independent of the
+workspace). The `replace` directives are what those isolated builds use to find
+the logger module. Static assets for the README live in `.github_assets/`.
 
 ## Commands
 
@@ -28,7 +37,7 @@ go test ./internal/cryptoutil/... -run TestFunctionName  # Run specific test
 go vet ./...               # Lint
 ```
 
-Local test image: `docker compose up --build` from the repo root. Releases: the server and CLI version independently (tags `server/vX.Y.Z` / `cli/vX.Y.Z`). `./scripts/release.sh <version> [--prerelease]` builds the multi-platform image, pushes it, and creates a GitHub release linking the image; `./scripts/release-cli.sh <version> [--prerelease]` creates a CLI GitHub release and (for stable) advances the `cli/stable` tag that `install.sh` follows. Both need an authenticated `gh`, and can be run from the `bs3dev` hub's Server/CLI Release actions.
+Local test image: `docker compose -f server/compose/compose.dev.yml up --build` (builds from source); production deploy pulls the published image via `server/compose/compose.prod.yml`. Releases: the server and CLI version independently (tags `server/vX.Y.Z` / `cli/vX.Y.Z`). `./dev/scripts/release.sh <version> [--prerelease]` builds the multi-platform image, pushes it, and creates a GitHub release linking the image; `./dev/scripts/release-cli.sh <version> [--prerelease]` creates a CLI GitHub release and (for stable) advances the `cli/stable` tag that `install.sh` follows. Both need an authenticated `gh`, and can be run from the `bs3dev` hub's Server/CLI Release actions.
 
 Server flags: `--verbose` (debug logging). Configure port via `VAULT_API_PORT` env var (default: 8080).
 

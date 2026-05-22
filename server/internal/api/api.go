@@ -13,8 +13,8 @@ import (
 	"unicode"
 
 	l "github.com/bkenks/bs3-logger"
-	"github.com/bkenks/bs3/internal/cryptoutil"
-	"github.com/bkenks/bs3/internal/vault"
+	"github.com/bkenks/bs3-server/internal/cryptoutil"
+	"github.com/bkenks/bs3-server/internal/vault"
 	"github.com/google/uuid"
 )
 

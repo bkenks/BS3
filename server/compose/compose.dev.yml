@@ -1,0 +1,16 @@
+# Local/dev compose: builds the server image straight from the working tree.
+# Lives in server/compose/, so the build context (the repo root, required because
+# the Dockerfile pulls in ../logger) is two levels up.
+services:
+  bs3-server:
+    build:
+      context: ../..
+      dockerfile: server/Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - bs3-data:/data
+    restart: unless-stopped
+
+volumes:
+  bs3-data:

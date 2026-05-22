@@ -55,9 +55,10 @@ type action struct {
 // ─── Go Command Helper ────────────────────────────────────────────────────────
 
 // goCmd creates a `go` exec.Cmd rooted at dir with GOWORK=off so the command
-// uses the module's own go.mod rather than the repo-root go.work workspace.
-// Without this, subprocesses inherit the workspace and fail with "module not
-// in workspace" errors when run from the repo root.
+// resolves dependencies from the module's own go.mod/go.sum, independent of the
+// repo-root go.work workspace. This matches how release and Docker builds
+// resolve modules, keeping the dev hub's artifacts reproducible and unaffected
+// by the other modules in the workspace.
 func goCmd(dir string, args ...string) *exec.Cmd {
 	cmd := exec.Command("go", args...)
 	cmd.Dir = dir
@@ -91,8 +92,8 @@ var allActions = []*action{
 	},
 	{
 		title:         "CLI › Release",
-		description:   "Run scripts/release-cli.sh — tag the version and create a GitHub release for the CLI",
-		releaseScript: "scripts/release-cli.sh",
+		description:   "Run dev/scripts/release-cli.sh — tag the version and create a GitHub release for the CLI",
+		releaseScript: "dev/scripts/release-cli.sh",
 	},
 
 	// ── Server: local testing ─────────────────────────────────────────────────
@@ -100,10 +101,11 @@ var allActions = []*action{
 
 	{
 		title:       "Server › Local Test (Docker)",
-		description: "docker compose up --build — build the image from local source, run it on :8080",
+		description: "Build the image from local source via server/compose/compose.dev.yml, run it on :8080",
 		makeCmd: func(repoRoot string) *exec.Cmd {
-			// The repo-root compose.yml has the build step; ctrl+c stops it.
-			cmd := exec.Command("docker", "compose", "up", "--build")
+			// compose.dev.yml has the build step; ctrl+c stops it.
+			cmd := exec.Command("docker", "compose",
+				"-f", "server/compose/compose.dev.yml", "up", "--build")
 			cmd.Dir = repoRoot
 			return cmd
 		},
@@ -142,12 +144,12 @@ var allActions = []*action{
 	},
 	{
 		title:         "Server › Release",
-		description:   "Run scripts/release.sh — build & push the multi-platform image and create a GitHub release",
-		releaseScript: "scripts/release.sh",
+		description:   "Run dev/scripts/release.sh — build & push the multi-platform image and create a GitHub release",
+		releaseScript: "dev/scripts/release.sh",
 	},
 	{
 		title:       "Server › Deploy (Production)",
-		description: "docker compose pull && up -d via server/compose/compose.yml (the published image)",
+		description: "docker compose pull && up -d via server/compose/compose.prod.yml (the published image)",
 		run:         serverDeployProd,
 	},
 
@@ -252,9 +254,10 @@ func buildAndZip(cliDir, outDir, goos, goarch string) error {
 // ─── Server Implementations ───────────────────────────────────────────────────
 
 // serverComposeDown stops and removes the local test container started by
-// "Server › Local Test", using the repo-root compose.yml.
+// "Server › Local Test", using server/compose/compose.dev.yml.
 func serverComposeDown(repoRoot string) (string, error) {
-	cmd := exec.Command("docker", "compose", "down")
+	cmd := exec.Command("docker", "compose",
+		"-f", "server/compose/compose.dev.yml", "down")
 	cmd.Dir = repoRoot
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -263,11 +266,13 @@ func serverComposeDown(repoRoot string) (string, error) {
 	return string(out), nil
 }
 
-// serverCleanDev tears down the local test stack from the repo-root compose.yml
-// completely: the container, the default network, the bs3-data volume, and the
-// image built from local source. This deletes any vault data in that volume.
+// serverCleanDev tears down the local test stack from
+// server/compose/compose.dev.yml completely: the container, the default
+// network, the bs3-data volume, and the image built from local source. This
+// deletes any vault data in that volume.
 func serverCleanDev(repoRoot string) (string, error) {
-	cmd := exec.Command("docker", "compose", "down",
+	cmd := exec.Command("docker", "compose",
+		"-f", "server/compose/compose.dev.yml", "down",
 		"--volumes", "--rmi", "local", "--remove-orphans")
 	cmd.Dir = repoRoot
 	out, err := cmd.CombinedOutput()
@@ -289,11 +294,11 @@ func serverBuildBinary(repoRoot string) (string, error) {
 }
 
 // serverDeployProd pulls the published image and starts it detached, using
-// server/compose/compose.yml — the production deployment step. Run it on the
-// host that should serve the vault.
+// server/compose/compose.prod.yml — the production deployment step. Run it on
+// the host that should serve the vault.
 func serverDeployProd(repoRoot string) (string, error) {
 	var log strings.Builder
-	composeFile := filepath.Join("server", "compose", "compose.yml")
+	composeFile := filepath.Join("server", "compose", "compose.prod.yml")
 	for _, args := range [][]string{
 		{"compose", "-f", composeFile, "pull"},
 		{"compose", "-f", composeFile, "up", "-d"},

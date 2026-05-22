@@ -11,9 +11,9 @@ import (
 	"time"
 
 	l "github.com/bkenks/bs3-logger"
-	"github.com/bkenks/bs3/internal/api"
-	"github.com/bkenks/bs3/internal/constants"
-	"github.com/bkenks/bs3/internal/vault"
+	"github.com/bkenks/bs3-server/internal/api"
+	"github.com/bkenks/bs3-server/internal/constants"
+	"github.com/bkenks/bs3-server/internal/vault"
 	"github.com/charmbracelet/log"
 )
 

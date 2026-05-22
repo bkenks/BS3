@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bkenks/bs3/internal/constants"
+	"github.com/bkenks/bs3-server/internal/constants"
 )
 
 // newTestVault creates a fully initialized, unlocked vault backed by a

@@ -50,8 +50,8 @@ if ! git clone --depth 1 --branch "$TAG" "https://github.com/${REPO}.git" "$TMP_
 fi
 
 info "Building BS3 CLI..."
-# The repo's root go.work only includes ./dev, so building cli-tool must run
-# with GOWORK=off — otherwise the build fails resolving the workspace.
+# Build cli-tool in isolation (GOWORK=off) so it resolves dependencies from
+# cli-tool's own go.mod/go.sum, independent of the repo-root go.work workspace.
 cd "$TMP_DIR/src/cli-tool"
 CGO_ENABLED=0 GOWORK=off go build -o "$TMP_DIR/$BINARY_NAME" . 2>&1 || die "Build failed."
 

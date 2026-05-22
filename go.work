@@ -1,3 +1,8 @@
 go 1.25.7
 
-use ./dev
+use (
+	./cli-tool
+	./dev
+	./logger
+	./server
+)

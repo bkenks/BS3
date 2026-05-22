@@ -3,7 +3,7 @@
 # Hub, and create a component-prefixed GitHub release (server/vX.Y.Z).
 #
 # Run `docker login` and `gh auth login` once first, then:
-#   ./scripts/release.sh <version> [--prerelease]
+#   ./dev/scripts/release.sh <version> [--prerelease]
 #
 # <version>      bare semver X.Y.Z (no leading v, no prefix)
 # --prerelease   optional; marks the GitHub release as a prerelease and
@@ -49,8 +49,8 @@ IMAGE="$DOCKER_USER/$IMAGE_NAME"
 BUILDER="bs3-builder"
 
 # Build context must be the repo root (Dockerfile pulls in ../logger).
-# This script lives in scripts/, so the repo root is one level up.
-cd "$(dirname "$0")/.."
+# This script lives in dev/scripts/, so the repo root is two levels up.
+cd "$(dirname "$0")/../.."
 
 # Warn (but continue) if the working tree is dirty — the release will be cut
 # from the current HEAD commit, not from the uncommitted changes.
