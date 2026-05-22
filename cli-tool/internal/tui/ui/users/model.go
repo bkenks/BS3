@@ -1,9 +1,9 @@
 package users
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/bkenks/bs3/internal/apiclient"
 	"github.com/bkenks/bs3/internal/constants"
@@ -56,7 +56,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		w, h := shared.SizeBuffer()
 		m.List.SetSize(w, h)
 		return m, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, constants.UserListKeyMap.Select):
 			if _, ok := m.SelectedItem(); ok {
@@ -75,4 +75,4 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *Model) View() string { return m.List.View() }
+func (m *Model) View() tea.View { return tea.NewView(m.List.View()) }

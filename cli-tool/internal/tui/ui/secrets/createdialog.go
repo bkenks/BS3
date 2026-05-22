@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/bkenks/bs3/internal/apiclient"
 	"github.com/bkenks/bs3/internal/tui/ui/events"
@@ -44,7 +44,7 @@ func (m *CreateDialog) Init() tea.Cmd { return m.inputs[0].Focus() }
 func (m *CreateDialog) SetStatusMsg(msg string) { m.statusMsg = msg }
 
 func (m *CreateDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	keyMsg, isKey := msg.(tea.KeyMsg)
+	keyMsg, isKey := msg.(tea.KeyPressMsg)
 	if !isKey {
 		var cmds []tea.Cmd
 		for i := range m.inputs {
@@ -107,7 +107,7 @@ func (m *CreateDialog) storeCmd(name, value, folder string) tea.Cmd {
 	}
 }
 
-func (m *CreateDialog) View() string {
+func (m *CreateDialog) View() tea.View {
 	body := fmt.Sprintf("Name\n%s\n\nValue\n%s\n\nFolder\n%s",
 		m.inputs[0].View(), m.inputs[1].View(), m.inputs[2].View())
 	if m.statusMsg != "" {
@@ -117,5 +117,5 @@ func (m *CreateDialog) View() string {
 	dialog := shared.DialogStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left, shared.DialogTitleStyle.Render("New Secret"), body),
 	)
-	return lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog)
+	return tea.NewView(lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog))
 }

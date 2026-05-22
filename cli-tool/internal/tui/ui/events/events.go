@@ -1,9 +1,9 @@
 package events
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"github.com/bkenks/bs3/internal/apiclient"
 	"github.com/bkenks/bs3/internal/tui/ui/shared"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 type Event interface{ isEvent() }

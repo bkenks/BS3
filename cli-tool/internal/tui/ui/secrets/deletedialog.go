@@ -3,9 +3,9 @@ package secrets
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/bkenks/bs3/internal/apiclient"
 	"github.com/bkenks/bs3/internal/constants"
@@ -28,7 +28,7 @@ func (m *DeleteDialog) Init() tea.Cmd           { return nil }
 func (m *DeleteDialog) SetStatusMsg(msg string) { m.statusMsg = msg }
 
 func (m *DeleteDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	keyMsg, ok := msg.(tea.KeyMsg)
+	keyMsg, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return m, nil
 	}
@@ -50,7 +50,7 @@ func (m *DeleteDialog) deleteCmd() tea.Cmd {
 	}
 }
 
-func (m *DeleteDialog) View() string {
+func (m *DeleteDialog) View() tea.View {
 	body := fmt.Sprintf("Delete %q?", m.name)
 	if m.statusMsg != "" {
 		body += "\n\n" + m.statusMsg
@@ -59,5 +59,5 @@ func (m *DeleteDialog) View() string {
 	dialog := shared.DialogStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left, shared.DialogTitleStyle.Render("Delete Secret"), body),
 	)
-	return lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog)
+	return tea.NewView(lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog))
 }

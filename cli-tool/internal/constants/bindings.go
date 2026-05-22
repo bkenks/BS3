@@ -1,8 +1,7 @@
 package constants
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
 )
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,18 +46,18 @@ type defaultKeyMap struct {
 var DefaultKeyMap = defaultKeyMap{
 	Select: key.NewBinding(
 		key.WithKeys(
-			tea.KeyEnter.String(),
-			tea.KeySpace.String(),
+			"enter",
+			"space",
 		),
 		key.WithHelp(
-			tea.KeyEnter.String()+"/"+tea.KeySpace.String(),
+			"enter/space",
 			unsetText,
 		),
 	),
 	Exit: key.NewBinding(
-		key.WithKeys(tea.KeyEsc.String()),
+		key.WithKeys("esc"),
 		key.WithHelp(
-			tea.KeyEsc.String(),
+			"esc",
 			unsetText,
 		),
 	),
@@ -101,32 +100,32 @@ type secretListKeyMap struct {
 
 var SecretListKeyMap = secretListKeyMap{
 	Select: key.NewBinding(
-		key.WithKeys(tea.KeyEnter.String(), tea.KeyTab.String()), // open folder / view secret
-		key.WithHelp(tea.KeyEnter.String(), unsetText),           // corresponding help text
+		key.WithKeys("enter", "tab"),     // open folder / view secret
+		key.WithHelp("enter", unsetText), // corresponding help text
 	),
 	Back: key.NewBinding(
-		key.WithKeys(tea.KeyEsc.String()),
-		key.WithHelp(tea.KeyEsc.String(), unsetText),
+		key.WithKeys("esc"),
+		key.WithHelp("esc", unsetText),
 	),
 	NewSecret: key.NewBinding(
-		key.WithKeys(tea.KeyCtrlN.String()),
-		key.WithHelp(tea.KeyCtrlN.String(), unsetText),
+		key.WithKeys("ctrl+n"),
+		key.WithHelp("ctrl+n", unsetText),
 	),
 	NewFolder: key.NewBinding(
-		key.WithKeys(tea.KeyCtrlD.String()),
-		key.WithHelp(tea.KeyCtrlD.String(), unsetText),
+		key.WithKeys("ctrl+d"),
+		key.WithHelp("ctrl+d", unsetText),
 	),
 	Delete: key.NewBinding(
-		key.WithKeys(tea.KeyCtrlBackslash.String()),
-		key.WithHelp(tea.KeyCtrlBackslash.String(), unsetText),
+		key.WithKeys("ctrl+\\"),
+		key.WithHelp("ctrl+\\", unsetText),
 	),
 	Move: key.NewBinding(
-		key.WithKeys(tea.KeyCtrlF.String()),
-		key.WithHelp(tea.KeyCtrlF.String(), unsetText),
+		key.WithKeys("ctrl+f"),
+		key.WithHelp("ctrl+f", unsetText),
 	),
 	Edit: key.NewBinding(
-		key.WithKeys(tea.KeyCtrlE.String()),
-		key.WithHelp(tea.KeyCtrlE.String(), unsetText),
+		key.WithKeys("ctrl+e"),
+		key.WithHelp("ctrl+e", unsetText),
 	),
 }
 
@@ -193,16 +192,16 @@ type tokenListKeyMap struct {
 
 var TokenListKeyMap = tokenListKeyMap{
 	Select: key.NewBinding(
-		key.WithKeys(tea.KeyTab.String()),
-		key.WithHelp(tea.KeyTab.String(), unsetText),
+		key.WithKeys("tab"),
+		key.WithHelp("tab", unsetText),
 	),
 	NewToken: key.NewBinding(
-		key.WithKeys(tea.KeyCtrlN.String()),
-		key.WithHelp(tea.KeyCtrlN.String(), unsetText),
+		key.WithKeys("ctrl+n"),
+		key.WithHelp("ctrl+n", unsetText),
 	),
 	DeleteToken: key.NewBinding(
-		key.WithKeys(tea.KeyCtrlBackslash.String()),
-		key.WithHelp(tea.KeyCtrlBackslash.String(), unsetText),
+		key.WithKeys("ctrl+\\"),
+		key.WithHelp("ctrl+\\", unsetText),
 	),
 }
 
@@ -229,16 +228,16 @@ type userListKeyMap struct {
 
 var UserListKeyMap = userListKeyMap{
 	Select: key.NewBinding(
-		key.WithKeys(tea.KeyTab.String()),
-		key.WithHelp(tea.KeyTab.String(), unsetText),
+		key.WithKeys("tab"),
+		key.WithHelp("tab", unsetText),
 	),
 	AddUser: key.NewBinding(
-		key.WithKeys(tea.KeyCtrlN.String()),
-		key.WithHelp(tea.KeyCtrlN.String(), unsetText),
+		key.WithKeys("ctrl+n"),
+		key.WithHelp("ctrl+n", unsetText),
 	),
 	DeleteUser: key.NewBinding(
-		key.WithKeys(tea.KeyCtrlBackslash.String()),
-		key.WithHelp(tea.KeyCtrlBackslash.String(), unsetText),
+		key.WithKeys("ctrl+\\"),
+		key.WithHelp("ctrl+\\", unsetText),
 	),
 }
 
@@ -263,7 +262,7 @@ type appKeyMap struct {
 
 var AppKeyMap = appKeyMap{
 	ToggleView: key.NewBinding(
-		key.WithKeys(tea.KeyCtrlT.String()),
+		key.WithKeys("ctrl+t"),
 		key.WithHelp("ctrl+t", "toggle view"),
 	),
 }
@@ -281,12 +280,12 @@ type confirmKeyMap struct {
 
 var ConfirmKeyMap = confirmKeyMap{
 	Proceed: key.NewBinding(
-		key.WithKeys(tea.KeyCtrlP.String()),
+		key.WithKeys("ctrl+p"),
 		key.WithHelp("ctrl+p", unsetText),
 	),
 	Exit: key.NewBinding(
-		key.WithKeys(tea.KeyEsc.String()),
-		key.WithHelp(tea.KeyEsc.String(), unsetText),
+		key.WithKeys("esc"),
+		key.WithHelp("esc", unsetText),
 	),
 }
 

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/bkenks/bs3/internal/apiclient"
 	"github.com/bkenks/bs3/internal/tui/ui/events"
@@ -36,7 +36,7 @@ func (m *GenerateDialog) Init() tea.Cmd           { return m.inputs[0].Focus() }
 func (m *GenerateDialog) SetStatusMsg(msg string) { m.statusMsg = msg }
 
 func (m *GenerateDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	keyMsg, isKey := msg.(tea.KeyMsg)
+	keyMsg, isKey := msg.(tea.KeyPressMsg)
 	if !isKey {
 		var cmds []tea.Cmd
 		for i := range m.inputs {
@@ -101,7 +101,7 @@ func (m *GenerateDialog) generateCmd(name string, ttl int64) tea.Cmd {
 	}
 }
 
-func (m *GenerateDialog) View() string {
+func (m *GenerateDialog) View() tea.View {
 	body := fmt.Sprintf("Name\n%s\n\nTTL (seconds)\n%s", m.inputs[0].View(), m.inputs[1].View())
 	if m.statusMsg != "" {
 		body += "\n\n" + m.statusMsg
@@ -110,5 +110,5 @@ func (m *GenerateDialog) View() string {
 	dialog := shared.DialogStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left, shared.DialogTitleStyle.Render("Generate Token"), body),
 	)
-	return lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog)
+	return tea.NewView(lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog))
 }

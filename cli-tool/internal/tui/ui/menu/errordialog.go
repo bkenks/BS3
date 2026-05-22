@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/bkenks/bs3/internal/tui/ui/events"
 	"github.com/bkenks/bs3/internal/tui/ui/shared"
@@ -26,7 +26,7 @@ func NewErrorDialog(raw string) *ErrorDialog {
 func (m *ErrorDialog) Init() tea.Cmd { return nil }
 
 func (m *ErrorDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -37,12 +37,12 @@ func (m *ErrorDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *ErrorDialog) View() string {
+func (m *ErrorDialog) View() tea.View {
 	body := m.body + "\n\nany key · back to menu"
 	dialog := shared.DialogStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left, shared.DialogTitleStyle.Render("Error"), body),
 	)
-	return lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog)
+	return tea.NewView(lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog))
 }
 
 // extractPrettyJSON finds the first '{' in raw, attempts to parse everything

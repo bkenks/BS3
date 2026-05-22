@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/bkenks/bs3/internal/constants"
 	"github.com/bkenks/bs3/internal/enveditor"
@@ -32,7 +32,7 @@ func (m *SetAuthMethodDialog) Init() tea.Cmd { return nil }
 func (m *SetAuthMethodDialog) SetStatusMsg(msg string) { m.statusMsg = msg }
 
 func (m *SetAuthMethodDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	keyMsg, isKey := msg.(tea.KeyMsg)
+	keyMsg, isKey := msg.(tea.KeyPressMsg)
 	if !isKey {
 		return m, nil
 	}
@@ -68,7 +68,7 @@ func (m *SetAuthMethodDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *SetAuthMethodDialog) View() string {
+func (m *SetAuthMethodDialog) View() tea.View {
 	var body string
 	if m.saved {
 		body = fmt.Sprintf("Auth method set to %q.\n\nesc · back", choices[m.selected])
@@ -94,5 +94,5 @@ func (m *SetAuthMethodDialog) View() string {
 	dialog := shared.DialogStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left, shared.DialogTitleStyle.Render("Set Auth Method"), body),
 	)
-	return lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog)
+	return tea.NewView(lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog))
 }

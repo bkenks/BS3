@@ -191,21 +191,30 @@ docker compose down            # stop and remove the container
 
 ### Releasing a Production Image
 
-Edit the variables at the top of `scripts/release.sh` (`DOCKER_USER`,
-`IMAGE_NAME`, `VERSION`, `PLATFORMS`), then run it. It builds the image for **multiple
-architectures** (`linux/amd64` + `linux/arm64` by default) via `buildx`, tags it
-`:VERSION` and `:latest`, and pushes both to Docker Hub:
+The server and CLI version **independently** — releases are tagged
+`server/vX.Y.Z` and `cli/vX.Y.Z` so each ships on its own schedule.
+
+`scripts/release.sh` cuts a server release. Pass the version (and `--prerelease`
+for a pre-release):
 
 ```bash
 docker login        # once
-./scripts/release.sh
+./scripts/release.sh 1.2.3                # stable release
+./scripts/release.sh 1.3.0-rc --prerelease   # pre-release
 ```
 
+It builds the image for **multiple architectures** (`linux/amd64` +
+`linux/arm64`) via `buildx`, pushes `:1.2.3` (plus `:latest` for a stable
+release), then creates a GitHub release `server/v1.2.3` whose notes link the
+Docker image. `gh` (the GitHub CLI) must be installed and authenticated.
+
 Multi-platform matters: building on an ARM Mac with a plain `docker build`
-produces an ARM-only image that won't run on an `amd64` Linux server — `buildx`
-with `--platform` builds for both. The `:VERSION` tag keeps a runnable history;
-`:latest` always points at the newest push. The image uses a multi-stage build
-— only the compiled binary ends up in the final Alpine-based image (~10 MB).
+produces an ARM-only image that won't run on an `amd64` Linux server. The image
+uses a multi-stage build — only the compiled binary ends up in the final
+Alpine-based image (~10 MB).
+
+> Both releases can also be cut from the `bs3dev` hub (**Server › Release** /
+> **CLI › Release**), which prompts for the version and stable/pre-release.
 
 ### Production Deployment
 
@@ -267,13 +276,17 @@ BS3 ships with a companion CLI for interacting with the server. It supports both
 
 ### Install the CLI
 
-**Production install** — requires Go and git; builds from `main` and installs to `~/.local/bin/bs3`:
+**Production install** — requires Go and git; builds the latest stable CLI release and installs to `~/.local/bin/bs3`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bkenks/BS3/main/cli-tool/scripts/install.sh | sh
 ```
 
-There is no separate CLI "release" step — the install script always builds the current `main`, so shipping a CLI change just means merging it to `main`.
+The installer builds from the `cli/stable` tag, which each stable CLI release advances. To pin a specific version, set `BS3_CLI_VERSION`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bkenks/BS3/main/cli-tool/scripts/install.sh | BS3_CLI_VERSION=0.4.0 sh
+```
 
 If `~/.local/bin` isn't on your `$PATH`, add this to your shell config (`~/.bashrc`, `~/.zshrc`, etc.):
 
@@ -287,6 +300,17 @@ export PATH="$HOME/.local/bin:$PATH"
 cd BS3/cli-tool
 GOWORK=off go build -o bs3 .      # or run directly: GOWORK=off go run . <args>
 ```
+
+### Releasing the CLI
+
+`scripts/release-cli.sh` cuts a CLI release — independent of the server:
+
+```bash
+./scripts/release-cli.sh 0.4.0                # stable: tags cli/v0.4.0 + advances cli/stable
+./scripts/release-cli.sh 0.5.0-rc --prerelease   # pre-release: tag + GitHub release only
+```
+
+It creates a GitHub release `cli/v0.4.0`; a stable release also force-moves the `cli/stable` tag so `install.sh` picks it up. Requires an authenticated `gh`.
 
 ### Uninstall the CLI
 

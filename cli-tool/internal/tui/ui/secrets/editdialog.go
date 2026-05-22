@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/bkenks/bs3/internal/apiclient"
 	"github.com/bkenks/bs3/internal/tui/ui/events"
@@ -36,7 +36,7 @@ func (m *EditDialog) Init() tea.Cmd { return m.input.Focus() }
 func (m *EditDialog) SetStatusMsg(msg string) { m.statusMsg = msg }
 
 func (m *EditDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	keyMsg, isKey := msg.(tea.KeyMsg)
+	keyMsg, isKey := msg.(tea.KeyPressMsg)
 	if !isKey {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
@@ -72,7 +72,7 @@ func (m *EditDialog) editCmd(value string) tea.Cmd {
 	}
 }
 
-func (m *EditDialog) View() string {
+func (m *EditDialog) View() tea.View {
 	folder := m.folder
 	if folder == "" {
 		folder = "(ungrouped)"
@@ -86,5 +86,5 @@ func (m *EditDialog) View() string {
 	dialog := shared.DialogStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left, shared.DialogTitleStyle.Render("Edit Secret"), body),
 	)
-	return lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog)
+	return tea.NewView(lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog))
 }

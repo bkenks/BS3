@@ -1,8 +1,8 @@
 package menu
 
 import (
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/bkenks/bs3/internal/tui/ui/events"
 	"github.com/bkenks/bs3/internal/tui/ui/shared"
@@ -59,9 +59,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		w, h := shared.SizeBuffer()
 		m.List.SetSize(w, h)
 		return m, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "enter", " ":
+		case "enter", "space":
 			if state, ok := m.selectedState(); ok {
 				return m, events.CmdSetState(state)
 			}
@@ -73,4 +73,4 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *Model) View() string { return m.List.View() }
+func (m *Model) View() tea.View { return tea.NewView(m.List.View()) }

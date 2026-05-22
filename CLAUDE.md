@@ -28,7 +28,7 @@ go test ./internal/cryptoutil/... -run TestFunctionName  # Run specific test
 go vet ./...               # Lint
 ```
 
-Building/releasing the Docker image is done from the repo root: `docker compose up --build` for a local test image, or `./scripts/release.sh` to build multi-platform and push to Docker Hub.
+Local test image: `docker compose up --build` from the repo root. Releases: the server and CLI version independently (tags `server/vX.Y.Z` / `cli/vX.Y.Z`). `./scripts/release.sh <version> [--prerelease]` builds the multi-platform image, pushes it, and creates a GitHub release linking the image; `./scripts/release-cli.sh <version> [--prerelease]` creates a CLI GitHub release and (for stable) advances the `cli/stable` tag that `install.sh` follows. Both need an authenticated `gh`, and can be run from the `bs3dev` hub's Server/CLI Release actions.
 
 Server flags: `--verbose` (debug logging). Configure port via `VAULT_API_PORT` env var (default: 8080).
 

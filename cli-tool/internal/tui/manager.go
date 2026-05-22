@@ -3,8 +3,8 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/bkenks/bs3/internal/apiclient"
 	"github.com/bkenks/bs3/internal/tui/ui/events"
@@ -243,7 +243,7 @@ func (m *ModelManager) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	// Global keys handled before sub-model routing.
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		if keyMsg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
@@ -425,14 +425,18 @@ func (m *ModelManager) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // ─── View ────────────────────────────────────────────────────────────────────
 
-func (m *ModelManager) View() string {
+func (m *ModelManager) View() tea.View {
 	// List views and the main menu wrap in DocStyle; dialogs render full-screen themselves.
+	var v tea.View
 	switch m.state {
 	case shared.StateMainMenu, shared.StateSecretsList, shared.StateTokensList, shared.StateUsersList:
-		return shared.DocStyle.Render(m.active.View())
+		v = m.active.View()
+		v.SetContent(shared.DocStyle.Render(v.Content))
 	default:
-		return m.active.View()
+		v = m.active.View()
 	}
+	v.AltScreen = true
+	return v
 }
 
 // ─── Run ─────────────────────────────────────────────────────────────────────
@@ -442,7 +446,7 @@ func Run(baseURL, token, username, password, authMethod string) error {
 	client.Username = username
 	client.Password = password
 	client.AuthMethod = authMethod
-	p := tea.NewProgram(New(*client), tea.WithAltScreen())
+	p := tea.NewProgram(New(*client))
 	_, err := p.Run()
 	return err
 }

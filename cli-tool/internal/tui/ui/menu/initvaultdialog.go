@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/bkenks/bs3/internal/apiclient"
 	"github.com/bkenks/bs3/internal/constants"
@@ -108,7 +108,7 @@ func (m *InitVaultDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 	}
 
-	keyMsg, isKey := msg.(tea.KeyMsg)
+	keyMsg, isKey := msg.(tea.KeyPressMsg)
 	if !isKey {
 		var cmds []tea.Cmd
 		for i := range m.inputs {
@@ -206,7 +206,7 @@ func (m *InitVaultDialog) initCmd(serverURL, token, username, password, passphra
 	}
 }
 
-func (m *InitVaultDialog) View() string {
+func (m *InitVaultDialog) View() tea.View {
 	var content string
 	if m.done {
 		lines := []string{
@@ -245,5 +245,5 @@ func (m *InitVaultDialog) View() string {
 	dialog := shared.DialogStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left, shared.DialogTitleStyle.Render("Initialize Vault"), content),
 	)
-	return lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog)
+	return tea.NewView(lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog))
 }

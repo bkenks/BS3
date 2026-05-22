@@ -5,32 +5,23 @@ import (
 	"os"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/compat"
 	charm "github.com/charmbracelet/log"
 )
 
 // Global logger instance
 var Logger *charm.Logger
 var ErrBars = lipgloss.NewStyle().Foreground(lipgloss.Color("#ED6E88"))
-var Logo_Purple = lipgloss.AdaptiveColor{
-	Light: "#614f97ff",
-	Dark:  "#846ccc",
+var Logo_Purple = compat.AdaptiveColor{
+	Light: lipgloss.Color("#614f97ff"),
+	Dark:  lipgloss.Color("#846ccc"),
 }
-var Logo_LightBlue = lipgloss.AdaptiveColor{
-	Light: "#8fb2cb",
-	Dark:  "#89c5f0",
+var Logo_LightBlue = compat.AdaptiveColor{
+	Light: lipgloss.Color("#8fb2cb"),
+	Dark:  lipgloss.Color("#89c5f0"),
 }
 var BS3_BG = lipgloss.Color("#05085c")
-
-var logoBox = lipgloss.NewStyle().
-	Padding(0, 10, 1, 11).
-	BorderForeground(Logo_Purple).
-	Border(lipgloss.ThickBorder(), true, false)
-var logsBox = lipgloss.NewStyle().
-	Bold(true).
-	Padding(0, 10).
-	BorderForeground(Logo_Purple).
-	Border(lipgloss.ThickBorder(), true, false)
 
 func init() {
 	Logger = charm.NewWithOptions(os.Stderr, charm.Options{
@@ -48,11 +39,13 @@ func LogError(logFunc func(interface{}, ...interface{}), msg string, keyvals ...
 
 	bar := ErrBars.Render("---")
 
-	fmt.Println()
-	fmt.Println(bar)
+	// Write to stderr so these lines interleave in order with the logger,
+	// which also writes to stderr; mixing in stdout reorders under Docker.
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, bar)
 	logFunc(msg+"\n", keyvals...)
-	fmt.Println(bar)
-	fmt.Println()
+	fmt.Fprintln(os.Stderr, bar)
+	fmt.Fprintln(os.Stderr)
 }
 
 func LogAddInfo(logFunc func(interface{}, ...interface{}), msg string, keyvals ...interface{}) {
@@ -65,26 +58,22 @@ func LogAddInfo(logFunc func(interface{}, ...interface{}), msg string, keyvals .
 	logFunc(msg+"\n", keyvals...)
 }
 
+// titleBox styles "BS3" like a Bubble Tea list header: a solid pill with
+// padded, bold text on the brand purple background.
+var titleBox = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("#f5f3ff")).
+	Background(Logo_Purple).
+	Padding(0, 1)
+
+// PrintBS3 and PrintLogSeperator write to os.Stderr — the same stream the
+// logger uses — so the pills appear in order with the log output. Writing to
+// stdout instead causes Docker to flush them after all stderr log lines.
+
 func PrintBS3() {
-	b := lipgloss.NewStyle().Foreground(Logo_Purple).Render(B)
-	s := lipgloss.NewStyle().Foreground(Logo_LightBlue).Render(S)
-	three := lipgloss.NewStyle().Foreground(Logo_LightBlue).Render(Three)
-
-	bs3 := lipgloss.JoinHorizontal(lipgloss.Left, b, s, three)
-
-	content := lipgloss.JoinVertical(
-		lipgloss.Center,
-		bs3,
-	)
-
-	boxedContent := logoBox.Render(content)
-
-	fmt.Print(boxedContent)
-	fmt.Println()
+	fmt.Fprintln(os.Stderr, titleBox.Render("Welcome to BS3."))
 }
 
 func PrintLogSeperator() {
-	logsText := lipgloss.NewStyle().Foreground(Logo_Purple).Render("Logs")
-	fmt.Print(logsBox.Render(logsText))
-	fmt.Println()
+	fmt.Fprintln(os.Stderr, titleBox.Render("Logs"))
 }

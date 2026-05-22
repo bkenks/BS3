@@ -12,7 +12,7 @@ import (
 	"os"
 	"path/filepath"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func main() {
@@ -22,7 +22,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	p := tea.NewProgram(newModel(repoRoot), tea.WithAltScreen())
+	p := tea.NewProgram(newModel(repoRoot))
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "error running dev hub:", err)
 		os.Exit(1)

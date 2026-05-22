@@ -3,7 +3,7 @@ package shared
 type SessionState int
 
 const (
-	StateMainMenu     SessionState = iota
+	StateMainMenu SessionState = iota
 	StateSecretsList
 	StateTokensList
 	StateViewSecret

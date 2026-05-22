@@ -3,8 +3,8 @@ package tokens
 import (
 	"fmt"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/bkenks/bs3/internal/tui/ui/events"
 	"github.com/bkenks/bs3/internal/tui/ui/shared"
@@ -23,13 +23,13 @@ func NewGeneratedDialog(name, token string, expiresIn int64) *GeneratedDialog {
 func (m *GeneratedDialog) Init() tea.Cmd { return nil }
 
 func (m *GeneratedDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "esc" {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
 		return m, events.CmdSetState(shared.StateTokensList)
 	}
 	return m, nil
 }
 
-func (m *GeneratedDialog) View() string {
+func (m *GeneratedDialog) View() tea.View {
 	exp := "never expires"
 	if m.expiresIn > 0 {
 		exp = fmt.Sprintf("expires in %ds", m.expiresIn)
@@ -39,5 +39,5 @@ func (m *GeneratedDialog) View() string {
 	dialog := shared.DialogStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left, shared.DialogTitleStyle.Render("Token Generated"), body),
 	)
-	return lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog)
+	return tea.NewView(lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog))
 }

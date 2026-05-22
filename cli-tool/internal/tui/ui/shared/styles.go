@@ -1,18 +1,19 @@
 package shared
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/compat"
 )
 
 var (
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Colors
-	DarkPink         = lipgloss.AdaptiveColor{Light: "#EE6FF8", Dark: "#EE6FF8"}
-	DullGrey         = lipgloss.AdaptiveColor{Light: "#C2B8C2", Dark: "#4D4D4D"}
-	Purple           = lipgloss.AdaptiveColor{Light: "#F793FF", Dark: "#AD58B4"}
-	VerySubduedColor = lipgloss.AdaptiveColor{Light: "#DDDADA", Dark: "#4b4b4b"}
-	SubduedColor     = lipgloss.AdaptiveColor{Light: "#9B9B9B", Dark: "#5C5C5C"}
-	MediumGrey       = lipgloss.AdaptiveColor{Light: "#A49FA5", Dark: "#777777"}
+	DarkPink         = compat.AdaptiveColor{Light: lipgloss.Color("#EE6FF8"), Dark: lipgloss.Color("#EE6FF8")}
+	DullGrey         = compat.AdaptiveColor{Light: lipgloss.Color("#C2B8C2"), Dark: lipgloss.Color("#4D4D4D")}
+	Purple           = compat.AdaptiveColor{Light: lipgloss.Color("#F793FF"), Dark: lipgloss.Color("#AD58B4")}
+	VerySubduedColor = compat.AdaptiveColor{Light: lipgloss.Color("#DDDADA"), Dark: lipgloss.Color("#4b4b4b")}
+	SubduedColor     = compat.AdaptiveColor{Light: lipgloss.Color("#9B9B9B"), Dark: lipgloss.Color("#5C5C5C")}
+	MediumGrey       = compat.AdaptiveColor{Light: lipgloss.Color("#A49FA5"), Dark: lipgloss.Color("#777777")}
 	DarkPurple       = lipgloss.Color("62")
 	White            = lipgloss.Color("230")
 

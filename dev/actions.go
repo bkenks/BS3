@@ -23,11 +23,13 @@ import (
 //   - makeCmd:      runs a single command interactively via tea.ExecProcess.
 //     The TUI suspends and the user sees live output until the process exits.
 //   - run:          runs a multi-step Go function in a background goroutine.
-//     The TUI shows a spinner, then a success/error result.
+//     The TUI shows a spinner, then the captured output in a scrollable modal.
 //   - inputPrompt + makeInputCmd: prompts the user for text, then runs the
 //     resulting command interactively via tea.ExecProcess.
 //   - inputPrompt + runWithInput: prompts the user for text, then runs a
 //     Go function in a background goroutine.
+//   - releaseScript: opens a release form (version + channel), then runs the
+//     named script as a captured action and shows its output in a modal.
 type action struct {
 	title       string
 	description string
@@ -35,13 +37,19 @@ type action struct {
 	// Direct interactive command — TUI suspends while it runs.
 	makeCmd func(repoRoot string) *exec.Cmd
 
-	// Background Go function — shows spinner, then result.
-	run func(repoRoot string) error
+	// Background Go function — shows spinner, then the captured output modal.
+	// Returns the combined command output AND an error.
+	run func(repoRoot string) (string, error)
 
 	// Text input is collected first, then one of the following executes.
 	inputPrompt  string
 	makeInputCmd func(repoRoot, input string) *exec.Cmd // → interactive
 	runWithInput func(repoRoot, input string) error     // → background goroutine
+
+	// Release script path, relative to the repo root. When set, selecting the
+	// action opens stateReleaseForm; on submit the script is run as a captured
+	// action: bash <repoRoot>/<releaseScript> <version> [--prerelease].
+	releaseScript string
 }
 
 // ─── Go Command Helper ────────────────────────────────────────────────────────
@@ -75,11 +83,16 @@ var allActions = []*action{
 		run:         cliCrossCompileBuild,
 	},
 	{
-		title:       "CLI › Run",
-		description: "Run the CLI interactively (go run . from cli-tool/)",
+		title:       "CLI › Run TUI",
+		description: "Launch the bs3 interactive TUI (go run . tui from cli-tool/)",
 		makeCmd: func(repoRoot string) *exec.Cmd {
-			return goCmd(filepath.Join(repoRoot, "cli-tool"), "run", ".")
+			return goCmd(filepath.Join(repoRoot, "cli-tool"), "run", ".", "tui")
 		},
+	},
+	{
+		title:         "CLI › Release",
+		description:   "Run scripts/release-cli.sh — tag the version and create a GitHub release for the CLI",
+		releaseScript: "scripts/release-cli.sh",
 	},
 
 	// ── Server: local testing ─────────────────────────────────────────────────
@@ -128,13 +141,9 @@ var allActions = []*action{
 		},
 	},
 	{
-		title:       "Server › Release Image",
-		description: "Run scripts/release.sh — build multi-platform, tag :VERSION + :latest, push to Docker Hub",
-		makeCmd: func(repoRoot string) *exec.Cmd {
-			cmd := exec.Command(filepath.Join(repoRoot, "scripts", "release.sh"))
-			cmd.Dir = repoRoot
-			return cmd
-		},
+		title:         "Server › Release",
+		description:   "Run scripts/release.sh — build & push the multi-platform image and create a GitHub release",
+		releaseScript: "scripts/release.sh",
 	},
 	{
 		title:       "Server › Deploy (Production)",
@@ -147,48 +156,54 @@ var allActions = []*action{
 	{
 		title:       "Logger › Run Tests",
 		description: "Run the logger visual test program (go run ./cmd/ from logger/)",
-		makeCmd: func(repoRoot string) *exec.Cmd {
-			return goCmd(filepath.Join(repoRoot, "logger"), "run", "./cmd/")
-		},
+		run:         loggerRunTests,
 	},
 }
 
 // ─── CLI Tool Implementations ─────────────────────────────────────────────────
 
 // cliDevInstall builds the bs3 binary into cli-tool/.testing/ and copies it
-// to ~/.local/bin/bs3.
-func cliDevInstall(repoRoot string) error {
+// to ~/.local/bin/bs3. It accumulates a short progress log and returns it
+// alongside any error.
+func cliDevInstall(repoRoot string) (string, error) {
+	var log strings.Builder
 	cliDir := filepath.Join(repoRoot, "cli-tool")
 	testDir := filepath.Join(cliDir, ".testing")
 	binPath := filepath.Join(testDir, "bs3")
 
 	if err := os.MkdirAll(testDir, 0o755); err != nil {
-		return fmt.Errorf("create .testing dir: %w", err)
+		return log.String(), fmt.Errorf("create .testing dir: %w", err)
 	}
+	fmt.Fprintf(&log, "Created %s\n", testDir)
 
 	// Build the binary.
 	cmd := goCmd(cliDir, "build", "-o", binPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("go build: %s", strings.TrimSpace(string(out)))
+		log.WriteString(string(out))
+		return log.String(), fmt.Errorf("go build: %s", strings.TrimSpace(string(out)))
 	}
+	fmt.Fprintf(&log, "Built binary at %s\n", binPath)
 
 	// Resolve destination in ~/.local/bin.
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("get home directory: %w", err)
+		return log.String(), fmt.Errorf("get home directory: %w", err)
 	}
 	dst := filepath.Join(homeDir, ".local", "bin", "bs3")
 
 	if err := copyFile(binPath, dst); err != nil {
-		return fmt.Errorf("copy to %s: %w", dst, err)
+		return log.String(), fmt.Errorf("copy to %s: %w", dst, err)
 	}
+	fmt.Fprintf(&log, "Copied to %s\n", dst)
 
-	return nil
+	return log.String(), nil
 }
 
 // cliCrossCompileBuild builds bs3 for linux/amd64 and linux/arm64 and zips
-// each binary into cli-tool/.builds/.
-func cliCrossCompileBuild(repoRoot string) error {
+// each binary into cli-tool/.builds/. It accumulates a short progress log and
+// returns it alongside any error.
+func cliCrossCompileBuild(repoRoot string) (string, error) {
+	var log strings.Builder
 	platforms := [][2]string{
 		{"linux", "amd64"},
 		{"linux", "arm64"},
@@ -198,17 +213,19 @@ func cliCrossCompileBuild(repoRoot string) error {
 	outDir := filepath.Join(cliDir, ".builds")
 
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
-		return fmt.Errorf("create .builds dir: %w", err)
+		return log.String(), fmt.Errorf("create .builds dir: %w", err)
 	}
+	fmt.Fprintf(&log, "Created %s\n", outDir)
 
 	for _, p := range platforms {
 		goos, goarch := p[0], p[1]
 		if err := buildAndZip(cliDir, outDir, goos, goarch); err != nil {
-			return fmt.Errorf("%s/%s: %w", goos, goarch, err)
+			return log.String(), fmt.Errorf("%s/%s: %w", goos, goarch, err)
 		}
+		fmt.Fprintf(&log, "Built and zipped %s/%s → %s_%s.zip\n", goos, goarch, goos, goarch)
 	}
 
-	return nil
+	return log.String(), nil
 }
 
 // buildAndZip compiles the CLI binary for the given GOOS/GOARCH and zips it
@@ -236,42 +253,46 @@ func buildAndZip(cliDir, outDir, goos, goarch string) error {
 
 // serverComposeDown stops and removes the local test container started by
 // "Server › Local Test", using the repo-root compose.yml.
-func serverComposeDown(repoRoot string) error {
+func serverComposeDown(repoRoot string) (string, error) {
 	cmd := exec.Command("docker", "compose", "down")
 	cmd.Dir = repoRoot
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("docker compose down: %s", strings.TrimSpace(string(out)))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("docker compose down: %s", strings.TrimSpace(string(out)))
 	}
-	return nil
+	return string(out), nil
 }
 
 // serverCleanDev tears down the local test stack from the repo-root compose.yml
 // completely: the container, the default network, the bs3-data volume, and the
 // image built from local source. This deletes any vault data in that volume.
-func serverCleanDev(repoRoot string) error {
+func serverCleanDev(repoRoot string) (string, error) {
 	cmd := exec.Command("docker", "compose", "down",
 		"--volumes", "--rmi", "local", "--remove-orphans")
 	cmd.Dir = repoRoot
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("docker compose down: %s", strings.TrimSpace(string(out)))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("docker compose down: %s", strings.TrimSpace(string(out)))
 	}
-	return nil
+	return string(out), nil
 }
 
 // serverBuildBinary compiles the server into server/bs3-server. GOWORK=off is
 // set by goCmd so the build uses server/go.mod, not the repo-root workspace.
-func serverBuildBinary(repoRoot string) error {
+func serverBuildBinary(repoRoot string) (string, error) {
 	cmd := goCmd(filepath.Join(repoRoot, "server"), "build", "-o", "bs3-server", "./cmd")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("go build: %s", strings.TrimSpace(string(out)))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("go build: %s", strings.TrimSpace(string(out)))
 	}
-	return nil
+	return string(out), nil
 }
 
 // serverDeployProd pulls the published image and starts it detached, using
 // server/compose/compose.yml — the production deployment step. Run it on the
 // host that should serve the vault.
-func serverDeployProd(repoRoot string) error {
+func serverDeployProd(repoRoot string) (string, error) {
+	var log strings.Builder
 	composeFile := filepath.Join("server", "compose", "compose.yml")
 	for _, args := range [][]string{
 		{"compose", "-f", composeFile, "pull"},
@@ -279,11 +300,49 @@ func serverDeployProd(repoRoot string) error {
 	} {
 		cmd := exec.Command("docker", args...)
 		cmd.Dir = repoRoot
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("docker %s: %s", strings.Join(args, " "), strings.TrimSpace(string(out)))
+		out, err := cmd.CombinedOutput()
+		log.WriteString(string(out))
+		if err != nil {
+			return log.String(), fmt.Errorf("docker %s: %s", strings.Join(args, " "), strings.TrimSpace(string(out)))
 		}
 	}
-	return nil
+	return log.String(), nil
+}
+
+// ─── Logger Implementation ────────────────────────────────────────────────────
+
+// loggerRunTests runs the logger's visual test program (go run ./cmd/) and
+// captures its combined output so it can be shown in the dev hub's output
+// modal. CLICOLOR_FORCE=1 is set so lipgloss still emits ANSI colors even
+// though the command's stdout is a pipe rather than a real terminal.
+func loggerRunTests(repoRoot string) (string, error) {
+	cmd := goCmd(filepath.Join(repoRoot, "logger"), "run", "./cmd/")
+	cmd.Env = append(cmd.Env, "CLICOLOR_FORCE=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("go run: %s", strings.TrimSpace(string(out)))
+	}
+	return string(out), nil
+}
+
+// ─── Release Implementation ───────────────────────────────────────────────────
+
+// runReleaseScript executes a release script with the frozen contract
+// `bash <repoRoot>/<script> <version> [--prerelease]`. --prerelease is passed
+// when stable is false. It returns the combined output and any error.
+func runReleaseScript(repoRoot, script, version string, stable bool) (string, error) {
+	scriptPath := filepath.Join(repoRoot, filepath.FromSlash(script))
+	args := []string{scriptPath, version}
+	if !stable {
+		args = append(args, "--prerelease")
+	}
+	cmd := exec.Command("bash", args...)
+	cmd.Dir = repoRoot
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("bash %s: %s", script, strings.TrimSpace(string(out)))
+	}
+	return string(out), nil
 }
 
 // ─── Shared Utilities ─────────────────────────────────────────────────────────

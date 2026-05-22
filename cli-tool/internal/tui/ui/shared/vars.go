@@ -1,5 +1,5 @@
 package shared
 
-import tea "github.com/charmbracelet/bubbletea"
+import tea "charm.land/bubbletea/v2"
 
 var WindowSize tea.WindowSizeMsg

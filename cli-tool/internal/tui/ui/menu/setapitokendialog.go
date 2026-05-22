@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/bkenks/bs3/internal/constants"
 	"github.com/bkenks/bs3/internal/enveditor"
@@ -34,7 +34,7 @@ func (m *SetAPITokenDialog) Init() tea.Cmd { return m.input.Focus() }
 func (m *SetAPITokenDialog) SetStatusMsg(msg string) { m.statusMsg = msg }
 
 func (m *SetAPITokenDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	keyMsg, isKey := msg.(tea.KeyMsg)
+	keyMsg, isKey := msg.(tea.KeyPressMsg)
 	if !isKey {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
@@ -70,7 +70,7 @@ func (m *SetAPITokenDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m *SetAPITokenDialog) View() string {
+func (m *SetAPITokenDialog) View() tea.View {
 	var body string
 	if m.saved {
 		body = "API token saved.\n\nesc · back"
@@ -85,5 +85,5 @@ func (m *SetAPITokenDialog) View() string {
 	dialog := shared.DialogStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left, shared.DialogTitleStyle.Render("Set API Token"), body),
 	)
-	return lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog)
+	return tea.NewView(lipgloss.Place(shared.WindowSize.Width, shared.WindowSize.Height, lipgloss.Center, lipgloss.Center, dialog))
 }
