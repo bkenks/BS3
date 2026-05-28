@@ -15,7 +15,7 @@ and released independently:
 - **`server/`** (`github.com/bkenks/bs3-server`) — The vault HTTP API server
 - **`cli-tool/`** (`github.com/bkenks/bs3-cli`) — CLI and TUI for interacting with the server
 - **`logger/`** (`github.com/bkenks/bs3-logger`) — Shared logging module (imported by server + cli via a `replace … => ../logger` directive)
-- **`dev/`** (`github.com/bkenks/bs3dev`) — The `bs3dev` developer hub: a Bubble Tea TUI (`go run ./dev/`) that wraps build/run/test/release tasks for the other modules
+- **`dev/`** (`github.com/bkenks/bs3dev`) — The `bs3dev` developer hub: a Bubble Tea TUI (`go run ./dev/`) that wraps build/run/test/release tasks for the other modules. A `devtui` equivalent is also available (`devtui` at the repo root, reads `devtui.toml`; scripts under `dev/devtui-scripts/`) — same menu entries, config-driven instead of Go-coded
 
 `go.work` lists all four modules so the editor/gopls resolves the whole repo.
 Release, install, and Docker builds run with `GOWORK=off` so each module builds

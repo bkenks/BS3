@@ -1,0 +1,108 @@
+title = "BS3 Dev Hub"
+
+# ── CLI ──────────────────────────────────────────────────────
+
+[[script]]
+name = "CLI › Dev Install"
+description = "Build bs3 into cli-tool/.testing/ and copy it to ~/.local/bin"
+path = "dev/devtui-scripts/cli-dev-install.sh"
+
+[[script]]
+name = "CLI › Cross-Compile Build"
+description = "Build linux/amd64 + linux/arm64 zips into cli-tool/.builds/"
+path = "dev/devtui-scripts/cli-cross-compile.sh"
+
+[[script]]
+name = "CLI › Run TUI"
+description = "Launch the bs3 interactive TUI (go run . tui from cli-tool/)"
+path = "dev/devtui-scripts/cli-run-tui.sh"
+interactive = true
+
+[[script]]
+name = "CLI › Release"
+description = "Tag the version and create a GitHub release for the CLI"
+path = "dev/devtui-scripts/cli-release.sh"
+
+  [[script.input]]
+  name = "version"
+  label = "Version (bare semver X.Y.Z)"
+  type = "text"
+  placeholder = "0.2.0"
+  required = true
+
+  [[script.input]]
+  name = "channel"
+  label = "Channel"
+  type = "select"
+  options = ["stable", "prerelease"]
+  default = "stable"
+  required = true
+
+# ── Server: local testing ───────────────────────────────────
+
+[[script]]
+name = "Server › Local Test (Docker)"
+description = "Build the image from local source via compose.dev.yml, run it on :8080"
+path = "dev/devtui-scripts/server-local-test.sh"
+interactive = true
+
+[[script]]
+name = "Server › Stop Local Test"
+description = "docker compose down — stop and remove the local test container"
+path = "dev/devtui-scripts/server-stop.sh"
+
+[[script]]
+name = "Server › Clean Dev Environment"
+description = "Destroy the local test container, image, volume, and network (deletes local vault data)"
+path = "dev/devtui-scripts/server-clean-dev.sh"
+
+[[script]]
+name = "Server › Run Dev Server"
+description = "Run the API server from source (go run ./cmd/ from server/)"
+path = "dev/devtui-scripts/server-run-dev.sh"
+interactive = true
+
+[[script]]
+name = "Server › Build From Source"
+description = "Compile the server binary to server/bs3-server (GOWORK=off go build ./cmd)"
+path = "dev/devtui-scripts/server-build.sh"
+
+# ── Server: release & deploy ────────────────────────────────
+
+[[script]]
+name = "Docker › Login"
+description = "docker login — authenticate to Docker Hub before releasing"
+path = "dev/devtui-scripts/docker-login.sh"
+interactive = true
+
+[[script]]
+name = "Server › Release"
+description = "Build & push the multi-platform image and create a GitHub release"
+path = "dev/devtui-scripts/server-release.sh"
+
+  [[script.input]]
+  name = "version"
+  label = "Version (bare semver X.Y.Z)"
+  type = "text"
+  placeholder = "3.4.0"
+  required = true
+
+  [[script.input]]
+  name = "channel"
+  label = "Channel"
+  type = "select"
+  options = ["stable", "prerelease"]
+  default = "stable"
+  required = true
+
+[[script]]
+name = "Server › Deploy (Production)"
+description = "docker compose pull && up -d via compose.prod.yml (the published image)"
+path = "dev/devtui-scripts/server-deploy-prod.sh"
+
+# ── Logger ──────────────────────────────────────────────────
+
+[[script]]
+name = "Logger › Run Tests"
+description = "Run the logger visual test program (go run ./cmd/ from logger/)"
+path = "dev/devtui-scripts/logger-test.sh"
