@@ -48,6 +48,54 @@ if [ -n "$(git status --porcelain)" ]; then
   echo "Warning: working tree has uncommitted changes; releasing from HEAD anyway." >&2
 fi
 
+# ── Cross-compile release binaries ───────────────────────────
+# Build a static `bs3` binary for each target platform and archive it. The
+# archives are uploaded as GitHub release assets so users can grab a prebuilt
+# binary instead of building from source via install.sh.
+#
+# Build conventions match the bs3dev hub's "CLI › Cross-Compile Build":
+# CGO_ENABLED=0 + GOWORK=off so cli-tool resolves against its own
+# go.mod/go.sum, independent of the repo-root go.work workspace.
+PLATFORMS="darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64"
+
+BUILD_DIR="$(mktemp -d)"
+trap 'rm -rf "$BUILD_DIR"' EXIT
+
+ASSETS=""
+echo "Building release binaries for: $PLATFORMS"
+for platform in $PLATFORMS; do
+  GOOS="${platform%/*}"
+  GOARCH="${platform#*/}"
+
+  bin="bs3"
+  [ "$GOOS" = "windows" ] && bin="bs3.exe"
+
+  stage="$BUILD_DIR/bs3_v${VERSION}_${GOOS}_${GOARCH}"
+  mkdir -p "$stage"
+
+  echo "  → $GOOS/$GOARCH"
+  ( cd cli-tool && CGO_ENABLED=0 GOWORK=off GOOS="$GOOS" GOARCH="$GOARCH" \
+      go build -o "$stage/$bin" . ) || {
+    echo "Error: build failed for $GOOS/$GOARCH." >&2
+    exit 1
+  }
+
+  # Archive: .zip for Windows, .tar.gz elsewhere (idiomatic per platform).
+  if [ "$GOOS" = "windows" ]; then
+    archive="$BUILD_DIR/bs3_v${VERSION}_${GOOS}_${GOARCH}.zip"
+    ( cd "$stage" && zip -qj "$archive" "$bin" )
+  else
+    archive="$BUILD_DIR/bs3_v${VERSION}_${GOOS}_${GOARCH}.tar.gz"
+    tar -czf "$archive" -C "$stage" "$bin"
+  fi
+  ASSETS="$ASSETS $archive"
+done
+
+# Checksums for all archives, so users can verify downloads.
+CHECKSUMS="$BUILD_DIR/bs3_v${VERSION}_checksums.txt"
+( cd "$BUILD_DIR" && shasum -a 256 bs3_v${VERSION}_*.tar.gz bs3_v${VERSION}_*.zip > "$CHECKSUMS" )
+ASSETS="$ASSETS $CHECKSUMS"
+
 # ── GitHub release ───────────────────────────────────────────
 TAG="cli/v$VERSION"
 TARGET="$(git rev-parse HEAD)"
@@ -76,18 +124,22 @@ BS3_CLI_VERSION=$VERSION $INSTALL_ONELINER
 \`\`\`"
 fi
 
-# `gh release create` creates the cli/v$VERSION tag itself.
+# `gh release create` creates the cli/v$VERSION tag itself, and uploads the
+# cross-compiled archives + checksums as release assets ($ASSETS, unquoted so
+# each path is a separate positional arg).
 if [ "$PRERELEASE" = true ]; then
   gh release create "$TAG" \
     --title "CLI v$VERSION" \
     --target "$TARGET" \
     --notes "$NOTES" \
-    --prerelease
+    --prerelease \
+    $ASSETS
 else
   gh release create "$TAG" \
     --title "CLI v$VERSION" \
     --target "$TARGET" \
-    --notes "$NOTES"
+    --notes "$NOTES" \
+    $ASSETS
 fi
 
 RELEASE_URL="$(gh release view "$TAG" --json url --jq .url 2>/dev/null || echo "$TAG")"
