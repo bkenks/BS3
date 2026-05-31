@@ -51,6 +51,7 @@ var (
 	argMoveSecret    = "movesecret"
 	argWriteEnv      = "writeenv"
 	argRmEnv         = "rmenv"
+	argSidecar       = "sidecar"
 	argExportSecrets = "exportenv"
 	argImportSecrets = "importenv"
 
@@ -105,6 +106,13 @@ SECRETS:
     writeenv <prefix> <folder.name>        Write secrets as KEY=VALUE pairs to
                 [folder.name...]           /dev/shm/bs3-<prefix>.env (tmpfs, 0600)
     rmenv <prefix>                          Delete /dev/shm/bs3-<prefix>.env
+    sidecar [config_path]                   Read a YAML config (default
+                                            /config/sidecar.yml, or $BS3_SIDECAR_CONFIG)
+                                            mapping filename -> [folder.name...] and write
+                                            one KEY=VALUE env file per entry into the output
+                                            dir (default /out, or $BS3_OUT_DIR). Init-once:
+                                            writes everything and exits. Built for the
+                                            bs3-sidecar container.
     exportenv <output_file>                Export all secrets to a KEY=VALUE env file (0600)
     importenv <input_file> [folder]        Import secrets from a KEY=VALUE env file
                                             into an optional folder (skips duplicates)
@@ -125,6 +133,14 @@ CONFIG:
     set username <value>                    Save username to bs3.env
     set password <value>                    Save password to bs3.env
     set authmethod <token|basic>            Set auth method to bs3.env
+
+ENVIRONMENT:
+    BS3_ENV_FILE                            Override the path to bs3.env (default:
+                                            ~/.config/bs3/bs3.env). Connection settings
+                                            may also be supplied directly via
+                                            BS3_SERVER_URL / BS3_AUTH_METHOD /
+                                            BS3_API_TOKEN / BS3_USERNAME / BS3_PASSWORD.
+    BS3_SIDECAR_CONFIG, BS3_OUT_DIR         Sidecar config path and output dir (see 'sidecar').
 
 FLAGS:
     --help, -h                              Show this help message
@@ -353,6 +369,9 @@ func Run(args []string) {
 		}
 		f.Close()
 		fmt.Println(envPath)
+
+	case argSidecar:
+		runSidecar(args)
 
 	case argRmEnv:
 		prefix := getArgSafe(args, 1, fmt.Sprintf("bs3 %s <prefix>", argRmEnv))

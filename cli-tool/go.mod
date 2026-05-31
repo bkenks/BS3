@@ -10,6 +10,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.3
 	github.com/bkenks/bs3-logger v0.0.0-20260222230654-1e61b59041b6
 	github.com/joho/godotenv v1.5.1
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
