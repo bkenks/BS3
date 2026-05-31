@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Release the BS3 SERVER: build the multi-platform image, push it to Docker
-# Hub, and create a component-prefixed GitHub release (server/vX.Y.Z).
+# Release the BS3 SERVER: build the multi-platform image, push it to the GitHub
+# Container Registry (GHCR), and create a component-prefixed GitHub release
+# (server/vX.Y.Z).
 #
-# Run `docker login` and `gh auth login` once first, then:
+# Run `docker login ghcr.io` (use a PAT with write:packages) and
+# `gh auth login` once first, then:
 #   ./dev/scripts/release.sh <version> [--prerelease]
 #
 # <version>      bare semver X.Y.Z (no leading v, no prefix)
@@ -11,7 +13,8 @@
 set -e
 
 # ── Edit these ───────────────────────────────────────────────
-DOCKER_USER="bkenks"
+REGISTRY="ghcr.io"
+OWNER="bkenks"
 IMAGE_NAME="bs3-server"
 PLATFORMS="linux/amd64,linux/arm64"
 # ─────────────────────────────────────────────────────────────
@@ -45,7 +48,7 @@ if [ -n "$PRERELEASE_ARG" ]; then
   fi
 fi
 
-IMAGE="$DOCKER_USER/$IMAGE_NAME"
+IMAGE="$REGISTRY/$OWNER/$IMAGE_NAME"
 BUILDER="bs3-builder"
 
 # Build context must be the repo root (Dockerfile pulls in ../logger).
@@ -94,14 +97,14 @@ TARGET="$(git rev-parse HEAD)"
 if [ "$PRERELEASE" = false ]; then
   NOTES="BS3 Server v$VERSION
 
-Docker image: \`docker pull bkenks/bs3-server:$VERSION\`
-The \`bkenks/bs3-server:latest\` tag also points at this release.
+Docker image: \`docker pull $IMAGE:$VERSION\`
+The \`$IMAGE:latest\` tag also points at this release.
 
 Platforms: $PLATFORMS"
 else
   NOTES="BS3 Server v$VERSION (prerelease)
 
-Docker image: \`docker pull bkenks/bs3-server:$VERSION\`
+Docker image: \`docker pull $IMAGE:$VERSION\`
 This is a prerelease; the \`:latest\` tag was not updated.
 
 Platforms: $PLATFORMS"

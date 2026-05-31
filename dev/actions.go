@@ -137,9 +137,9 @@ var allActions = []*action{
 
 	{
 		title:       "Docker › Login",
-		description: "docker login — authenticate to Docker Hub before releasing",
+		description: "docker login ghcr.io — authenticate to GHCR before releasing (PAT with write:packages)",
 		makeCmd: func(repoRoot string) *exec.Cmd {
-			return exec.Command("docker", "login")
+			return exec.Command("docker", "login", "ghcr.io")
 		},
 	},
 	{

@@ -3,8 +3,9 @@
 # subpath-mounts ONLY its own file (so containers can't read each other's
 # secrets) and sources it in its entrypoint. Nothing touches disk.
 #
-# Build the image first (from the repo root):
-#   docker build -f Dockerfile.sidecar -t bs3-sidecar:latest .
+# Pull the published image (or build it yourself from the repo root):
+#   docker pull ghcr.io/bkenks/bs3-sidecar:latest
+#   docker build -f Dockerfile.sidecar -t ghcr.io/bkenks/bs3-sidecar:latest .
 #
 # Requires Docker Engine 26+ for `volume.subpath`. On older engines, give each
 # consumer its own tmpfs volume instead of subpath-mounting a shared one.
@@ -12,7 +13,7 @@
 services:
   # ── init-once: fetch + write all env files, then exit 0 ──────────────────
   bs3-secrets:
-    image: bs3-sidecar:latest
+    image: ghcr.io/bkenks/bs3-sidecar:latest
     restart: "no"
     volumes:
       # bs3.env holds BS3_API_TOKEN — clean predefined path, no host-path replication

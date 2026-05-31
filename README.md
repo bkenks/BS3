@@ -176,8 +176,8 @@ curl "http://localhost:8080/token?name=ci_token&ttl=3600" \
 ## Server Deployment
 
 The server ships as a Docker image. Releasing and deploying are separate steps:
-`dev/scripts/release.sh` **publishes** an image to Docker Hub, and your
-production Compose file **consumes** it.
+`dev/scripts/release.sh` **publishes** an image to the GitHub Container Registry
+(GHCR), and your production Compose file **consumes** it.
 
 ### Local Testing (Docker)
 
@@ -198,15 +198,16 @@ The server and CLI version **independently** — releases are tagged
 `--prerelease` for a pre-release):
 
 ```bash
-docker login        # once
+docker login ghcr.io   # once — username + a PAT with write:packages
 ./dev/scripts/release.sh 1.2.3                # stable release
 ./dev/scripts/release.sh 1.3.0-rc --prerelease   # pre-release
 ```
 
 It builds the image for **multiple architectures** (`linux/amd64` +
-`linux/arm64`) via `buildx`, pushes `:1.2.3` (plus `:latest` for a stable
-release), then creates a GitHub release `server/v1.2.3` whose notes link the
-Docker image. `gh` (the GitHub CLI) must be installed and authenticated.
+`linux/arm64`) via `buildx`, pushes `ghcr.io/bkenks/bs3-server:1.2.3` (plus
+`:latest` for a stable release), then creates a GitHub release `server/v1.2.3`
+whose notes link the image. `gh` (the GitHub CLI) must be installed and
+authenticated.
 
 Multi-platform matters: building on an ARM Mac with a plain `docker build`
 produces an ARM-only image that won't run on an `amd64` Linux server. The image
@@ -224,7 +225,7 @@ image:
 ```yaml
 services:
   bs3-server:
-    image: bkenks/bs3-server:latest
+    image: ghcr.io/bkenks/bs3-server:latest
     ports:
       - "8080:8080"
     volumes:

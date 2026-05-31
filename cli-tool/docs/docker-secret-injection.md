@@ -32,7 +32,9 @@ runs), so consumers source the file in their entrypoint instead.
 `logger/` module):
 
 ```bash
-docker build -f Dockerfile.sidecar -t bs3-sidecar:latest .
+docker pull ghcr.io/bkenks/bs3-sidecar:latest
+# or build it yourself from the repo root:
+#   docker build -f Dockerfile.sidecar -t ghcr.io/bkenks/bs3-sidecar:latest .
 ```
 
 **2. Write a sidecar config** (`sidecar.yml`) mapping each output filename to the
@@ -51,7 +53,7 @@ db.env:
 ```yaml
 services:
   bs3-secrets:
-    image: bs3-sidecar:latest
+    image: ghcr.io/bkenks/bs3-sidecar:latest
     restart: "no"
     volumes:
       - ${HOME}/.config/bs3/bs3.env:/env/bs3.env:ro   # auth (holds BS3_API_TOKEN)

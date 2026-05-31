@@ -1,6 +1,6 @@
 services:
   bs3-server:
-    image: bkenks/bs3-server:latest
+    image: ghcr.io/bkenks/bs3-server:latest
     ports:
       - "8080:8080"
     volumes:
