@@ -21,7 +21,7 @@ interactive = true
 [[script]]
 name = "CLI › Release"
 description = "Tag the version and create a GitHub release for the CLI"
-path = "dev/devtui-scripts/cli-release.sh"
+path = "dev/scripts/release-cli.sh"
 
   [[script.input]]
   name = "version"
@@ -71,14 +71,14 @@ path = "dev/devtui-scripts/server-build.sh"
 
 [[script]]
 name = "Docker › Login"
-description = "docker login — authenticate to Docker Hub before releasing"
+description = "docker login ghcr.io — authenticate to GHCR before releasing (PAT with write:packages)"
 path = "dev/devtui-scripts/docker-login.sh"
 interactive = true
 
 [[script]]
 name = "Server › Release"
 description = "Build & push the multi-platform image and create a GitHub release"
-path = "dev/devtui-scripts/server-release.sh"
+path = "dev/scripts/release.sh"
 
   [[script.input]]
   name = "version"

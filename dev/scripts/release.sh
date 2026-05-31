@@ -25,6 +25,17 @@ usage() {
   exit 1
 }
 
+# devtui passes inputs as env vars (VERSION, CHANNEL); the bs3dev Go hub and
+# manual runs pass positional args. When invoked with no positional args, map
+# the env vars onto the positional interface below so devtui.toml can point
+# straight at this script (no wrapper needed).
+if [ "$#" -eq 0 ] && [ -n "${VERSION:-}" ]; then
+  set -- "$VERSION"
+  if [ "${CHANNEL:-}" = "prerelease" ]; then
+    set -- "$@" "--prerelease"
+  fi
+fi
+
 VERSION="$1"
 PRERELEASE_ARG="$2"
 
