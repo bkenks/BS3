@@ -1,0 +1,40 @@
+# bs3-sidecar — a lightweight init-once container that fetches secrets from a
+# BS3 vault and writes one env file per consumer into a shared tmpfs volume.
+#
+# Build from the REPO ROOT (the build needs both cli-tool/ and the sibling
+# logger/ module that cli-tool references via `replace => ../logger`):
+#
+#   docker build -f Dockerfile.sidecar -t bs3-sidecar:latest .
+#
+# Runtime contract (all overridable):
+#   /env/bs3.env        bind-mount your bs3.env here (holds BS3_API_TOKEN)   [BS3_ENV_FILE]
+#   /config/sidecar.yml bind-mount the filename -> [secret refs] config       [BS3_SIDECAR_CONFIG]
+#   /out                mount a shared tmpfs volume; env files are written here [BS3_OUT_DIR]
+#
+# See cli-tool/examples/compose.sidecar.yml and cli-tool/examples/sidecar.yml.
+
+# ---- build stage -----------------------------------------------------------
+FROM golang:1.25 AS build
+WORKDIR /src
+
+# Copy the sibling logger module first (referenced via replace => ../logger),
+# then the CLI module. Layer caching: deps resolve before source churn.
+COPY logger/ ./logger/
+COPY cli-tool/go.mod cli-tool/go.sum ./cli-tool/
+WORKDIR /src/cli-tool
+RUN GOWORK=off go mod download
+
+COPY cli-tool/ ./
+# Static binary (no libc) so it runs in any minimal base image.
+RUN CGO_ENABLED=0 GOWORK=off go build -trimpath -ldflags="-s -w" -o /bs3 .
+
+# ---- runtime stage ---------------------------------------------------------
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates
+COPY --from=build /bs3 /usr/local/bin/bs3
+
+ENV BS3_ENV_FILE=/env/bs3.env \
+    BS3_SIDECAR_CONFIG=/config/sidecar.yml \
+    BS3_OUT_DIR=/out
+
+ENTRYPOINT ["/usr/local/bin/bs3", "sidecar"]

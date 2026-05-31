@@ -1,0 +1,18 @@
+# bs3-sidecar config — maps an output env filename to the secrets it should
+# contain. Bind-mount this to /config/sidecar.yml in the bs3-sidecar container.
+#
+# Each top-level key is a filename written into the output dir (/out by default,
+# a shared tmpfs volume). Each value is a list of secret refs in folder.name
+# form (a bare name with no dot = the root/ungrouped folder). The written key is
+# the secret's name, upper-cased (e.g. myapp.myapp_db_url -> MYAPP_DB_URL=...).
+#
+# Convention: name secrets APPNAME_SECRETNAME and give each consumer its own
+# file, then subpath-mount only that file into the consumer (see
+# compose.sidecar.yml) so containers can't read each other's secrets.
+
+app.env:
+  - myapp.MYAPP_DB_URL
+  - myapp.MYAPP_API_KEY
+
+db.env:
+  - postgres.POSTGRES_PASSWORD
