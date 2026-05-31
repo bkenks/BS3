@@ -153,6 +153,14 @@ var allActions = []*action{
 		run:         serverDeployProd,
 	},
 
+	// ── Sidecar: release ──────────────────────────────────────────────────────
+
+	{
+		title:         "Sidecar › Release",
+		description:   "Run dev/scripts/release-sidecar.sh — build & push the multi-platform image and create a GitHub release",
+		releaseScript: "dev/scripts/release-sidecar.sh",
+	},
+
 	// ── Logger ────────────────────────────────────────────────────────────────
 
 	{

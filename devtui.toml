@@ -100,6 +100,28 @@ name = "Server › Deploy (Production)"
 description = "docker compose pull && up -d via compose.prod.yml (the published image)"
 path = "dev/devtui-scripts/server-deploy-prod.sh"
 
+# ── Sidecar: release ────────────────────────────────────────
+
+[[script]]
+name = "Sidecar › Release"
+description = "Build & push the multi-platform bs3-sidecar image and create a GitHub release"
+path = "dev/scripts/release-sidecar.sh"
+
+  [[script.input]]
+  name = "version"
+  label = "Version (bare semver X.Y.Z)"
+  type = "text"
+  placeholder = "0.1.0"
+  required = true
+
+  [[script.input]]
+  name = "channel"
+  label = "Channel"
+  type = "select"
+  options = ["stable", "prerelease"]
+  default = "stable"
+  required = true
+
 # ── Logger ──────────────────────────────────────────────────
 
 [[script]]
